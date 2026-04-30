@@ -1,14 +1,18 @@
-import { Download, Loader2, Pause, Play, RotateCcw, UploadCloud } from "lucide-react";
-import type { TrackRecord } from "../../entities/track/model/types";
+import { Download, ExternalLink, Loader2, Pause, Play, RotateCcw, UploadCloud } from "lucide-react";
+import { statusLabel, statusProgress, type TrackRecord } from "../../entities/track/model/types";
 import { assetUrl } from "../../shared/api/http";
 
 type Props = {
   busy: boolean;
   canPreview: boolean;
+  fileName: string | null;
   message: string;
   playing: boolean;
   track: TrackRecord | null;
+  uploadDisabled: boolean;
+  onStartOver: () => void;
   onUpload: (file: File | null) => void;
+  onResetControls: () => void;
   onTogglePlayback: () => void;
   onResetPlayback: () => void;
 };
@@ -16,13 +20,21 @@ type Props = {
 export function UploadPanel({
   busy,
   canPreview,
+  fileName,
   message,
   playing,
   track,
+  uploadDisabled,
+  onStartOver,
   onUpload,
+  onResetControls,
   onTogglePlayback,
   onResetPlayback,
 }: Props) {
+  const currentStatus = track?.status || "waiting";
+  const label = statusLabel(currentStatus);
+  const progress = statusProgress(currentStatus);
+
   return (
     <div className="panel upload">
       <label className="dropzone">
@@ -32,7 +44,7 @@ export function UploadPanel({
         <input
           type="file"
           accept="audio/*"
-          disabled={busy}
+          disabled={uploadDisabled}
           onChange={(event) => onUpload(event.target.files?.[0] || null)}
         />
       </label>
@@ -44,8 +56,41 @@ export function UploadPanel({
         </button>
         <button onClick={onResetPlayback} disabled={!canPreview}>
           <RotateCcw size={18} />
-          Reset
+          Сбросить
         </button>
+      </div>
+
+      {track && (
+        <div className="ab-panel">
+          <span>Оригинал</span>
+          <a className="audio-link" href={assetUrl(track.urls.original)} rel="noreferrer" target="_blank">
+            <ExternalLink size={16} />
+            Открыть оригинал
+          </a>
+          <span>Текущий preview</span>
+          <button onClick={onTogglePlayback} disabled={!canPreview}>
+            {playing ? <Pause size={18} /> : <Play size={18} />}
+            {playing ? "Пауза preview" : "Слушать preview"}
+          </button>
+        </div>
+      )}
+
+      <div className="track-summary">
+        <span>{fileName || "Файл не выбран"}</span>
+        <strong>{label}</strong>
+      </div>
+
+      <div className="progress-card">
+        <div className="progress-head">
+          <span>{label}</span>
+          <strong>{progress}%</strong>
+        </div>
+        <div className={track?.status === "failed" ? "progress failed" : "progress"}>
+          <i style={{width: `${progress}%`}} />
+        </div>
+        {track?.status === "separating" && (
+          <small>Подготовка стемов на бесплатном CPU-сервере может занять несколько минут.</small>
+        )}
       </div>
 
       <div className="message">
@@ -58,6 +103,17 @@ export function UploadPanel({
           <Download size={18} />
           Скачать мастер
         </a>
+      )}
+
+      {track && (
+        <div className="stacked-actions">
+          <button className="secondary-action" onClick={onResetControls} disabled={busy}>
+            Сбросить ручки
+          </button>
+          <button className="secondary-action" onClick={onStartOver} disabled={busy}>
+            Начать заново
+          </button>
+        </div>
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-const steps = ["Upload", "Separate", "Live mix", "Render", "Download"];
+const steps = ["Загрузка", "Разделение", "Живой микс", "Рендер", "Скачивание"];
 
 type Props = {
   activeStage: number;

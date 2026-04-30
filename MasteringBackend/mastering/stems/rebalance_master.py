@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Mapping
+from typing import Literal, Mapping
 
 import soundfile as sf
 
@@ -14,6 +14,7 @@ from mastering.orchestration.pipeline import run_mastering_pipeline
 from mastering.stems.stem_lab import (
     _delta_rebalance_mix,
     _load_stems,
+    _process_stems,
     _resample_audio,
     _run_demucs,
 )
@@ -76,6 +77,8 @@ CONTROL_FIELDS = {
     "analog_color",
 }
 
+MixMode = Literal["delta", "full"]
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -102,6 +105,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip-final-master",
         action="store_true",
         help="Export only the delta-rebalanced mix.",
+    )
+    parser.add_argument(
+        "--mix-mode",
+        choices=["delta", "full"],
+        default="delta",
+        help="delta keeps the original mix as base; full rebuilds from processed stems.",
     )
     return parser
 
@@ -164,6 +173,7 @@ def _write_report(
     profile: RebalancePreset,
     mastering_preset: str,
     skipped_final_master: bool,
+    mix_mode: MixMode,
 ) -> None:
     payload = {
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -171,7 +181,7 @@ def _write_report(
         "output": str(output_path),
         "stems_dir": str(stems_dir),
         "model": model,
-        "mix_mode": "delta",
+        "mix_mode": mix_mode,
         "profile": asdict(profile),
         "mastering_preset": mastering_preset,
         "skip_final_master": skipped_final_master,
@@ -194,11 +204,14 @@ def process_rebalance_master(
     keep_stems: bool = False,
     skip_final_master: bool = False,
     control_overrides: Mapping[str, float] | None = None,
+    mix_mode: MixMode = "delta",
 ) -> dict:
     input_path = Path(input_wav).resolve()
     output_path = Path(output_wav).resolve()
     if profile_name not in PRESETS:
         raise ValueError(f"Unknown profile: {profile_name}")
+    if mix_mode not in ("delta", "full"):
+        raise ValueError(f"Unknown mix mode: {mix_mode}")
 
     target_sample_rate = sf.info(input_path).samplerate
     profile = _preset_with_overrides(PRESETS[profile_name], control_overrides)
@@ -212,12 +225,16 @@ def process_rebalance_master(
         resolved_stems_dir = _run_demucs(input_path, generated_root, model)
 
     stems, stem_sample_rate = _load_stems(resolved_stems_dir)
-    candidate, candidate_sample_rate = _delta_rebalance_mix(
-        input_path,
-        stems,
-        stem_sample_rate,
-        _preset_args(profile),
-    )
+    if mix_mode == "delta":
+        candidate, candidate_sample_rate = _delta_rebalance_mix(
+            input_path,
+            stems,
+            stem_sample_rate,
+            _preset_args(profile),
+        )
+    else:
+        candidate = _process_stems(stems, stem_sample_rate, _preset_args(profile))
+        candidate_sample_rate = stem_sample_rate
 
     if skip_final_master:
         output = candidate
@@ -254,6 +271,7 @@ def process_rebalance_master(
         profile,
         mastering_preset,
         skip_final_master,
+        mix_mode,
     )
     return {
         "input": str(input_path),
@@ -261,6 +279,7 @@ def process_rebalance_master(
         "report": str(resolved_report_path),
         "stems_dir": str(resolved_stems_dir),
         "model": model,
+        "mix_mode": mix_mode,
         "profile": profile.name,
         "controls": asdict(profile),
         "mastering_preset": mastering_preset,
@@ -280,6 +299,7 @@ def main() -> int:
         report_path=args.report,
         keep_stems=args.keep_stems,
         skip_final_master=args.skip_final_master,
+        mix_mode=args.mix_mode,
     )
     if args.keep_stems:
         print(f"Generated stems kept at: {result['stems_dir']}")

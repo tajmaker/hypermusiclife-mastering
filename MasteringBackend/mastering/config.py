@@ -12,6 +12,16 @@ class Settings:
     safety_min_crest_db: float = 5.0
     safety_max_crest_drop_db: float = 4.0
     safety_max_limiter_avg_gr_db: float = 5.0
+    max_upload_size_mb: int = 80
+    allowed_upload_extensions: tuple[str, ...] = (
+        ".wav",
+        ".mp3",
+        ".aiff",
+        ".aif",
+        ".flac",
+        ".ogg",
+        ".oga",
+    )
 
 
 SETTINGS = Settings()

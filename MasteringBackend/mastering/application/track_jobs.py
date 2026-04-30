@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import BinaryIO, Literal
 
+from mastering.config import SETTINGS
 from mastering.stems.rebalance_master import process_rebalance_master
 from mastering.stems.stem_lab import _run_demucs
 
@@ -33,6 +34,7 @@ class RenderParams:
     profile: str
     mastering_preset: str
     controls: dict[str, float]
+    mix_mode: str = "delta"
     skip_final_master: bool = False
 
 
@@ -48,14 +50,28 @@ class TrackJobService:
         filename: str | None,
         model: str = "mdx_extra",
     ) -> TrackRecord:
+        suffix = Path(filename or "input.wav").suffix.lower() or ".wav"
+        if suffix not in SETTINGS.allowed_upload_extensions:
+            raise ValueError("Unsupported file type")
+
         track_id = uuid.uuid4().hex
         work_dir = self.root_dir / track_id
         work_dir.mkdir(parents=True, exist_ok=True)
 
-        suffix = Path(filename or "input.wav").suffix or ".wav"
         original_path = work_dir / f"original{suffix}"
+        max_bytes = SETTINGS.max_upload_size_mb * 1024 * 1024
+        written = 0
         with original_path.open("wb") as handle:
-            shutil.copyfileobj(file_obj, handle)
+            while True:
+                chunk = file_obj.read(1024 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > max_bytes:
+                    handle.close()
+                    original_path.unlink(missing_ok=True)
+                    raise ValueError(f"File is too large. Limit is {SETTINGS.max_upload_size_mb} MB")
+                handle.write(chunk)
 
         record = TrackRecord(
             track_id=track_id,
@@ -126,6 +142,7 @@ class TrackJobService:
                 report_path=report_path,
                 skip_final_master=params.skip_final_master,
                 control_overrides=params.controls,
+                mix_mode=params.mix_mode,
             )
             record.output_path = result["output"]
             record.report_path = result["report"]

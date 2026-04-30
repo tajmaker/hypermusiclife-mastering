@@ -1,5 +1,6 @@
 try:
     from pydantic import BaseModel, Field
+    from typing import Literal
 except Exception:  # pragma: no cover
     BaseModel = object
     Field = None
@@ -8,13 +9,13 @@ except Exception:  # pragma: no cover
 if Field is not None:
 
     class RebalanceControls(BaseModel):
-        vocal_gain: float | None = Field(default=None, ge=-6.0, le=6.0)
+        vocal_gain: float | None = Field(default=None, ge=-60.0, le=12.0)
         vocal_deharsh: float | None = Field(default=None, ge=0.0, le=100.0)
         vocal_width: float | None = Field(default=None, ge=0.0, le=100.0)
-        drums_gain: float | None = Field(default=None, ge=-6.0, le=6.0)
+        drums_gain: float | None = Field(default=None, ge=-60.0, le=12.0)
         drums_punch: float | None = Field(default=None, ge=0.0, le=100.0)
-        bass_gain: float | None = Field(default=None, ge=-6.0, le=6.0)
-        music_gain: float | None = Field(default=None, ge=-6.0, le=6.0)
+        bass_gain: float | None = Field(default=None, ge=-60.0, le=12.0)
+        music_gain: float | None = Field(default=None, ge=-60.0, le=12.0)
         music_bright: float | None = Field(default=None, ge=-3.0, le=3.0)
         analog_color: float | None = Field(default=None, ge=0.0, le=100.0)
 
@@ -32,6 +33,7 @@ if Field is not None:
         report_path: str | None = None
         skip_final_master: bool = False
         keep_stems: bool = False
+        mix_mode: Literal["delta", "full"] = "delta"
         controls: RebalanceControls | None = None
 
 
@@ -40,3 +42,4 @@ if Field is not None:
         mastering_preset: str = "balanced"
         controls: RebalanceControls | None = None
         skip_final_master: bool = False
+        mix_mode: Literal["delta", "full"] = "delta"

@@ -1,4 +1,4 @@
-import type { MasteringControls } from "../../mastering/model/controls";
+import type { MasteringControls, MixMode } from "../../mastering/model/controls";
 import type { TrackRecord } from "../model/types";
 import { apiUrl, parseJsonResponse } from "../../../shared/api/http";
 
@@ -21,6 +21,7 @@ export async function fetchTrack(trackId: string): Promise<TrackRecord> {
 export async function requestTrackRender(
   trackId: string,
   controls: MasteringControls,
+  mixMode: MixMode,
 ): Promise<TrackRecord> {
   const response = await fetch(apiUrl(`/tracks/${trackId}/render`), {
     method: "POST",
@@ -28,6 +29,7 @@ export async function requestTrackRender(
     body: JSON.stringify({
       profile: "safe",
       mastering_preset: "balanced",
+      mix_mode: mixMode,
       controls,
     }),
   });

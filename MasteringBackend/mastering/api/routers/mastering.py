@@ -58,6 +58,7 @@ if APIRouter is not None:
                 report_path=request.report_path,
                 keep_stems=request.keep_stems,
                 skip_final_master=request.skip_final_master,
+                mix_mode=request.mix_mode,
                 control_overrides=request.controls.enabled() if request.controls else None,
             )
         except Exception as exc:
@@ -65,8 +66,11 @@ if APIRouter is not None:
 
     @router.post("/tracks")
     async def upload_track(file: UploadFile = File(...), model: str = "mdx_extra") -> dict:
-        record = track_jobs.create_track(file.file, file.filename, model=model)
-        return track_jobs.to_payload(record)
+        try:
+            record = track_jobs.create_track(file.file, file.filename, model=model)
+            return track_jobs.to_payload(record)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.get("/tracks/{track_id}")
     async def get_track(track_id: str) -> dict:
@@ -115,6 +119,7 @@ if APIRouter is not None:
             profile=request.profile,
             mastering_preset=request.mastering_preset,
             controls=request.controls.enabled() if request.controls else {},
+            mix_mode=request.mix_mode,
             skip_final_master=request.skip_final_master,
         )
         return track_jobs.to_payload(track_jobs.render_track(track_id, params))

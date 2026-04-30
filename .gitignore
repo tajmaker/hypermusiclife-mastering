@@ -32,6 +32,8 @@ MasteringFrontend/frontend_server.*.log
 *.oga
 DEMO_85_stem_lab_stems/
 Исходники/
+hosted_runs/
+stem_runs/
 
 # Documents and local notes
 *.docx

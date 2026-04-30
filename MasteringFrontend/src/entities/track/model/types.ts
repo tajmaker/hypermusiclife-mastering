@@ -36,3 +36,29 @@ export function isMixReady(status: TrackStatus): boolean {
 export function isProcessing(status: TrackStatus): boolean {
   return status === "uploaded" || status === "separating" || status === "rendering";
 }
+
+export function statusLabel(status: TrackStatus | "waiting"): string {
+  const labels: Record<TrackStatus | "waiting", string> = {
+    waiting: "Ожидание",
+    uploaded: "Файл загружен",
+    separating: "Подготовка стемов",
+    ready_to_mix: "Готово к миксу",
+    rendering: "Рендер мастера",
+    done: "Готово",
+    failed: "Ошибка",
+  };
+  return labels[status];
+}
+
+export function statusProgress(status: TrackStatus | "waiting"): number {
+  const progress: Record<TrackStatus | "waiting", number> = {
+    waiting: 0,
+    uploaded: 10,
+    separating: 45,
+    ready_to_mix: 70,
+    rendering: 88,
+    done: 100,
+    failed: 100,
+  };
+  return progress[status];
+}
