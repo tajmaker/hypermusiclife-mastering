@@ -42,3 +42,10 @@ DEMO_85_stem_lab_stems/
 Thumbs.db
 .idea/
 .vscode/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example

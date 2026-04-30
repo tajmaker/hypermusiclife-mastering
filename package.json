@@ -5,6 +5,11 @@
   "scripts": {
     "build": "npm --prefix MasteringFrontend install && npm --prefix MasteringFrontend run build",
     "frontend:dev": "npm --prefix MasteringFrontend run dev",
-    "frontend:build": "npm --prefix MasteringFrontend run build"
+    "frontend:build": "npm --prefix MasteringFrontend run build",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.86.0"
   }
 }
