@@ -168,14 +168,14 @@ GET /api/v1/stem-rebalance/presets
 
 Если возвращаются `safe` и `vocal`, backend живой.
 
-## 5. Cloudflare Pages из GitHub
+## 5. Cloudflare из GitHub
 
 Cloudflare должен деплоить frontend из GitHub, не из локальной папки.
 
 В Cloudflare:
 
 ```text
-Workers & Pages -> Create application -> Pages -> Connect to Git
+Workers & Pages -> Create application -> Import a repository / Connect GitHub
 ```
 
 Выберите GitHub репозиторий:
@@ -184,7 +184,27 @@ Workers & Pages -> Create application -> Pages -> Connect to Git
 tajmaker/hypermusiclife-mastering
 ```
 
-Build settings:
+В новом интерфейсе Cloudflare проект может выглядеть как Worker со static
+assets, а не как старый Pages project. Это нормально.
+
+Чтобы не зависеть от спрятанных полей dashboard, в корне репозитория есть:
+
+```text
+wrangler.jsonc
+```
+
+Он указывает Cloudflare, где лежат собранные static assets:
+
+```jsonc
+{
+  "assets": {
+    "directory": "./MasteringFrontend/dist",
+    "not_found_handling": "single-page-application"
+  }
+}
+```
+
+Если Cloudflare показывает старые Pages build settings, используйте:
 
 ```text
 Framework preset: Vite
@@ -193,29 +213,26 @@ Build command: npm run build
 Build output directory: dist
 ```
 
-Важно: если `Root directory` оставить пустым, Cloudflare будет собирать корень
-monorepo. Тогда он может увидеть `requirements.txt`, начать ставить Python
-зависимости и потом упасть на `npm run build`, потому что frontend лежит в
+Если Cloudflare собирает корень monorepo, используйте:
+
+```text
+Build command: npm run build
+Build output directory / Assets directory: MasteringFrontend/dist
+```
+
+В корне есть `package.json`, поэтому `npm run build` из корня сам соберёт
 `MasteringFrontend`.
 
-Правильный вариант для Cloudflare Pages:
+Если Cloudflare не даёт указать output directory в UI, это не страшно: он должен
+взять assets directory из `wrangler.jsonc`.
 
-```text
-Root directory: MasteringFrontend
-Build command: npm run build
-Build output directory: dist
-```
+### Environment variable
 
-Запасной вариант, если Cloudflare по какой-то причине должен собирать корень:
+Переменная `VITE_API_URL` всё ещё желательна, но больше не обязательна:
+frontend сам использует Hugging Face URL на production-домене и локальный backend
+на `localhost`.
 
-```text
-Root directory: пусто
-Build command: npm run build
-Build output directory: MasteringFrontend/dist
-```
-
-Для этого в корень репозитория добавлен `package.json`, который прокидывает
-build внутрь `MasteringFrontend`.
+Если поле переменных доступно, добавьте:
 
 Environment variable:
 
