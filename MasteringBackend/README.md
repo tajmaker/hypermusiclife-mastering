@@ -1,3 +1,13 @@
+---
+title: HyperMusicLife Mastering Backend
+emoji: 🎛️
+colorFrom: yellow
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # MasteringBackend Architecture
 - `mastering/api`: HTTP boundary (FastAPI stubs and future routers).
 - `mastering/orchestration`: pipeline wiring and job lifecycle helpers.

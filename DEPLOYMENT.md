@@ -84,6 +84,39 @@ origin  https://github.com/tajmaker/hypermusiclife-mastering.git
 hf      https://huggingface.co/spaces/tajmaker/hypermusiclife
 ```
 
+### Авторизация Hugging Face
+
+Hugging Face больше не принимает пароль при `git push`. Нужен **Access Token**
+или SSH key.
+
+Самый простой вариант:
+
+1. Откройте Hugging Face.
+2. Перейдите в:
+
+```text
+Settings -> Access Tokens
+```
+
+3. Создайте token с правами на запись. Обычно нужен `write` доступ.
+4. При первом `git push` Git спросит логин и пароль:
+
+```text
+Username: tajmaker
+Password: <сюда вставить Hugging Face access token>
+```
+
+Важно: вставлять нужно не пароль от аккаунта, а именно token.
+
+Если Git Credential Manager уже запомнил неправильный пароль, удалите старую
+запись для `huggingface.co` в Windows Credential Manager:
+
+```text
+Windows -> Credential Manager -> Windows Credentials -> huggingface.co -> Remove
+```
+
+После этого повторите deploy, и Git снова спросит credentials.
+
 ## 4. Деплой backend в Hugging Face
 
 Hugging Face Space должен получать не весь monorepo, а только backend.
@@ -101,6 +134,25 @@ git subtree push --prefix MasteringBackend hf main
 ```
 
 После push Hugging Face сам запустит Docker build.
+
+Если Space уже содержит стартовые файлы Hugging Face и push отклоняется с:
+
+```text
+rejected ... (fetch first)
+```
+
+то для первого деплоя можно перезаписать ветку Space backend-содержимым:
+
+```powershell
+.\scripts\deploy-hf-backend.ps1 -ForceWithLease
+```
+
+`-ForceWithLease` безопаснее обычного `--force`: перед push он делает `fetch` и
+не должен молча затереть изменения, если remote успел обновиться ещё раз.
+
+Использовать этот режим стоит только когда вы понимаете, что в Hugging Face
+Space нет нужного кода, который надо сохранить. Для свежесозданного Space это
+обычно нормально.
 
 Проверить backend:
 
@@ -171,10 +223,16 @@ Backend деплоится явно:
 ```powershell
 git checkout main
 git pull
+git status
+git add MasteringBackend scripts DEPLOYMENT.md
+git commit -m "Update backend deployment"
 .\scripts\deploy-hf-backend.ps1
 ```
 
 Так backend не будет случайно пересобираться на каждый мелкий frontend commit.
+Важно: `git subtree push` деплоит только закоммиченную историю. Если изменить
+`MasteringBackend/README.md`, `Dockerfile` или Python-код и сразу запустить
+deploy без `git commit`, Hugging Face получит старую версию.
 
 ## 7. Локальный запуск
 
