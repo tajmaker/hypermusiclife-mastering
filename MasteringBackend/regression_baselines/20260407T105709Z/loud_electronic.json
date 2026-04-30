@@ -1,0 +1,18 @@
+{
+  "track_name": "loud_electronic.wav",
+  "lufs_before": -14.21411214096096,
+  "lufs_after": -15.027234211344304,
+  "true_peak_before": 1.1433149804366947,
+  "true_peak_after": -0.9999997757128092,
+  "crest_before": 14.56824543178558,
+  "crest_after": 13.279575184481306,
+  "lra_before": 2.6022909910485854,
+  "lra_after": 1.5395374283261898,
+  "limiter_avg_gr_db": 0.0,
+  "spectral_shift_low_db": -1.9654136264770443,
+  "spectral_shift_mid_db": -1.4516993701035261,
+  "spectral_shift_high_db": -1.290532794398903,
+  "safety_flags": [
+    "true_peak_risk"
+  ]
+}

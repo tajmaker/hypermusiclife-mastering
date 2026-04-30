@@ -1,0 +1,18 @@
+{
+  "track_name": "DEMO_88 - Tout Va S\u2019Arranger - POP - PAI-098.wav",
+  "lufs_before": -18.330132748124687,
+  "lufs_after": -14.672721784385677,
+  "true_peak_before": -4.764002262413982,
+  "true_peak_after": -1.0000001144840078,
+  "crest_before": 11.807099282897966,
+  "crest_after": 12.220612351295909,
+  "lra_before": 5.0637675067143775,
+  "lra_after": 2.883932896116672,
+  "limiter_avg_gr_db": 0.0,
+  "spectral_shift_low_db": 5.773821461785772,
+  "spectral_shift_mid_db": 8.487221263559668,
+  "spectral_shift_high_db": 9.373412599495646,
+  "safety_flags": [
+    "true_peak_risk"
+  ]
+}

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mastering-backend"
+version = "0.1.0"
+description = "Automatic mastering backend service package"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.0.0",
+    "soundfile>=0.12.1",
+    "pedalboard>=0.9.22",
+    "pyloudnorm>=0.1.1",
+    "scipy>=1.12.0",
+    "librosa>=0.10.1",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+    "python-multipart>=0.0.9",
+]
+stems = [
+    "demucs>=4.0.1",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mastering*"]
+

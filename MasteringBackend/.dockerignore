@@ -1,0 +1,12 @@
+.git
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+hosted_runs/
+research_runs/
+stem_runs/
+regression_inputs/
+regression_baselines/

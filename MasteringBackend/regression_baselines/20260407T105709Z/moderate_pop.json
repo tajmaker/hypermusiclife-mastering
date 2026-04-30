@@ -1,0 +1,18 @@
+{
+  "track_name": "moderate_pop.wav",
+  "lufs_before": -17.673970129688367,
+  "lufs_after": -14.23153373380287,
+  "true_peak_before": -4.518491876551112,
+  "true_peak_after": -0.9999997619231935,
+  "crest_before": 12.234191709382474,
+  "crest_after": 12.413806266922629,
+  "lra_before": 5.015696394656981,
+  "lra_after": 3.0522836234370967,
+  "limiter_avg_gr_db": 0.0,
+  "spectral_shift_low_db": 5.93252776288692,
+  "spectral_shift_mid_db": 7.653053053636263,
+  "spectral_shift_high_db": 7.570008462156874,
+  "safety_flags": [
+    "true_peak_risk"
+  ]
+}

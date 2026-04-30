@@ -1,0 +1,18 @@
+{
+  "track_name": "DEMO_91 - Looking At Me - POP - PAI-0101.wav",
+  "lufs_before": -18.34108660598068,
+  "lufs_after": -14.814735513506696,
+  "true_peak_before": -4.17625766694226,
+  "true_peak_after": -0.9999998575515996,
+  "crest_before": 12.231340363556857,
+  "crest_after": 12.473208883749198,
+  "lra_before": 4.135889321959773,
+  "lra_after": 3.05582315762906,
+  "limiter_avg_gr_db": 0.0,
+  "spectral_shift_low_db": 4.166709821229816,
+  "spectral_shift_mid_db": 8.846256319911063,
+  "spectral_shift_high_db": 9.165813442013858,
+  "safety_flags": [
+    "true_peak_risk"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "track_name": "DEMO_87 - Plus Loin Que Nos Peurs - POP - PAI-097.wav",
+  "lufs_before": -17.484314604630683,
+  "lufs_after": -13.957958830415066,
+  "true_peak_before": -2.511683385943889,
+  "true_peak_after": -1.0000002717131682,
+  "crest_before": 13.853931158321906,
+  "crest_after": 12.038171110853868,
+  "lra_before": 3.7167167627749027,
+  "lra_after": 2.8624373943560446,
+  "limiter_avg_gr_db": 0.0,
+  "spectral_shift_low_db": 5.66633941789776,
+  "spectral_shift_mid_db": 7.832855312277623,
+  "spectral_shift_high_db": 7.860132665361682,
+  "safety_flags": [
+    "true_peak_risk"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "track_name": "DEMO_92 - IN MY ZONE - POP - PAI-0102 (116BPM).wav",
+  "lufs_before": -18.079351974240677,
+  "lufs_after": -15.21053738901864,
+  "true_peak_before": -3.5359353395218647,
+  "true_peak_after": -1.0000000081788265,
+  "crest_before": 12.926392945261702,
+  "crest_after": 12.824022284369772,
+  "lra_before": 7.858425425870951,
+  "lra_after": 4.626167034951097,
+  "limiter_avg_gr_db": 0.0,
+  "spectral_shift_low_db": 4.242222238020503,
+  "spectral_shift_mid_db": 7.665316984313243,
+  "spectral_shift_high_db": 7.22796550415121,
+  "safety_flags": [
+    "true_peak_risk"
+  ]
+}

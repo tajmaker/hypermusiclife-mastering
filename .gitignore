@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Local runtime outputs
+MasteringBackend/hosted_runs/
+MasteringBackend/research_runs/
+MasteringBackend/stem_runs/
+MasteringBackend/regression_inputs/mastering_stems_*/
+MasteringBackend/regression_inputs/_stem_smoke_out_stems/
+MasteringBackend/regression_inputs/_stem_smoke_*.wav
+MasteringFrontend/frontend_server.*.log
+
+# Audio experiments and local source material
+*.wav
+*.mp3
+*.aiff
+*.flac
+*.ogg
+*.oga
+DEMO_85_stem_lab_stems/
+Исходники/
+
+# Documents and local notes
+*.docx
+Расшифровка_аудио_заказчика.txt
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,18 @@
+{
+  "track_name": "quiet_acoustic.wav",
+  "lufs_before": -26.312987179017174,
+  "lufs_after": -14.31539020831467,
+  "true_peak_before": -11.864341535135058,
+  "true_peak_after": -0.999999777949764,
+  "crest_before": 13.579962458737715,
+  "crest_after": 12.628946514911725,
+  "lra_before": 5.028704311612536,
+  "lra_after": 3.611813055438734,
+  "limiter_avg_gr_db": 0.5166789240188604,
+  "spectral_shift_low_db": 22.32748911189757,
+  "spectral_shift_mid_db": 24.97850451646933,
+  "spectral_shift_high_db": 25.048722426635898,
+  "safety_flags": [
+    "true_peak_risk"
+  ]
+}

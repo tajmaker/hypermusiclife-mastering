@@ -1,0 +1,18 @@
+{
+  "track_name": "DEMO_89 - Sigue Ahi - POP - PAI-099.wav",
+  "lufs_before": -16.80888567441389,
+  "lufs_after": -13.72347318969443,
+  "true_peak_before": -3.8847674147913844,
+  "true_peak_after": -0.9999997699031787,
+  "crest_before": 12.022528054873987,
+  "crest_after": 12.069280423111065,
+  "lra_before": 4.448685065290011,
+  "lra_after": 2.5569805201929405,
+  "limiter_avg_gr_db": 0.0,
+  "spectral_shift_low_db": 4.764221168016363,
+  "spectral_shift_mid_db": 6.775407892265299,
+  "spectral_shift_high_db": 7.352034432755204,
+  "safety_flags": [
+    "true_peak_risk"
+  ]
+}
