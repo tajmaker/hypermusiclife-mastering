@@ -193,6 +193,30 @@ Build command: npm run build
 Build output directory: dist
 ```
 
+Важно: если `Root directory` оставить пустым, Cloudflare будет собирать корень
+monorepo. Тогда он может увидеть `requirements.txt`, начать ставить Python
+зависимости и потом упасть на `npm run build`, потому что frontend лежит в
+`MasteringFrontend`.
+
+Правильный вариант для Cloudflare Pages:
+
+```text
+Root directory: MasteringFrontend
+Build command: npm run build
+Build output directory: dist
+```
+
+Запасной вариант, если Cloudflare по какой-то причине должен собирать корень:
+
+```text
+Root directory: пусто
+Build command: npm run build
+Build output directory: MasteringFrontend/dist
+```
+
+Для этого в корень репозитория добавлен `package.json`, который прокидывает
+build внутрь `MasteringFrontend`.
+
 Environment variable:
 
 ```text

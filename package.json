@@ -1,0 +1,10 @@
+{
+  "name": "hypermusiclife-mastering",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix MasteringFrontend install && npm --prefix MasteringFrontend run build",
+    "frontend:dev": "npm --prefix MasteringFrontend run dev",
+    "frontend:build": "npm --prefix MasteringFrontend run build"
+  }
+}
