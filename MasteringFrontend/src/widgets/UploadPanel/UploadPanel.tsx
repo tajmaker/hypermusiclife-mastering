@@ -1,6 +1,6 @@
-import { Download, ExternalLink, Loader2, Pause, Play, RotateCcw, UploadCloud } from "lucide-react";
-import { statusLabel, statusProgress, type TrackRecord } from "../../entities/track/model/types";
-import { assetUrl } from "../../shared/api/http";
+import { Loader2, RotateCcw, UploadCloud } from "lucide-react";
+import { statusLabel, type TrackRecord } from "../../entities/track/model/types";
+import type { SessionProgress } from "../../pages/mastering/model/useMasteringSession";
 
 type Props = {
   busy: boolean;
@@ -8,13 +8,12 @@ type Props = {
   fileName: string | null;
   message: string;
   playing: boolean;
+  progress: SessionProgress;
   track: TrackRecord | null;
   uploadDisabled: boolean;
   onStartOver: () => void;
   onUpload: (file: File | null) => void;
   onResetControls: () => void;
-  onTogglePlayback: () => void;
-  onResetPlayback: () => void;
 };
 
 export function UploadPanel({
@@ -23,21 +22,20 @@ export function UploadPanel({
   fileName,
   message,
   playing,
+  progress,
   track,
   uploadDisabled,
   onStartOver,
   onUpload,
   onResetControls,
-  onTogglePlayback,
-  onResetPlayback,
 }: Props) {
   const currentStatus = track?.status || "waiting";
   const label = statusLabel(currentStatus);
-  const progress = statusProgress(currentStatus);
+  const showLoader = progress.tone === "active" || busy;
 
   return (
     <div className="panel upload">
-      <label className="dropzone">
+      <label className={uploadDisabled ? "dropzone disabled" : "dropzone"}>
         <UploadCloud size={34} />
         <span>Загрузить трек</span>
         <small>WAV/MP3/AIFF, для MVP лучше короткие демо</small>
@@ -49,65 +47,31 @@ export function UploadPanel({
         />
       </label>
 
-      <div className="transport">
-        <button onClick={onTogglePlayback} disabled={!canPreview}>
-          {playing ? <Pause size={18} /> : <Play size={18} />}
-          {playing ? "Pause" : "Play"}
-        </button>
-        <button onClick={onResetPlayback} disabled={!canPreview}>
-          <RotateCcw size={18} />
-          Сбросить
-        </button>
-      </div>
-
-      {track && (
-        <div className="ab-panel">
-          <span>Оригинал</span>
-          <a className="audio-link" href={assetUrl(track.urls.original)} rel="noreferrer" target="_blank">
-            <ExternalLink size={16} />
-            Открыть оригинал
-          </a>
-          <span>Текущий preview</span>
-          <button onClick={onTogglePlayback} disabled={!canPreview}>
-            {playing ? <Pause size={18} /> : <Play size={18} />}
-            {playing ? "Пауза preview" : "Слушать preview"}
-          </button>
-        </div>
-      )}
-
       <div className="track-summary">
         <span>{fileName || "Файл не выбран"}</span>
         <strong>{label}</strong>
       </div>
 
-      <div className="progress-card">
+      <div className={`progress-card ${progress.tone}`}>
         <div className="progress-head">
-          <span>{label}</span>
-          <strong>{progress}%</strong>
+          <span>{progress.title}</span>
+          {showLoader ? <Loader2 className="spin" size={16} /> : <strong>{progress.progress}%</strong>}
         </div>
-        <div className={track?.status === "failed" ? "progress failed" : "progress"}>
-          <i style={{width: `${progress}%`}} />
+        <div className={progress.indeterminate ? "progress indeterminate" : "progress"}>
+          <i style={{ width: `${progress.progress}%` }} />
         </div>
-        {track?.status === "separating" && (
-          <small>Подготовка стемов на бесплатном CPU-сервере может занять несколько минут.</small>
-        )}
+        <small>{progress.detail}</small>
       </div>
 
       <div className="message">
-        {track?.status === "separating" && <Loader2 className="spin" size={16} />}
+        {showLoader && <Loader2 className="spin" size={16} />}
         <span>{track?.error_message || message}</span>
       </div>
 
-      {track?.urls.download && (
-        <a className="download" href={assetUrl(track.urls.download)}>
-          <Download size={18} />
-          Скачать мастер
-        </a>
-      )}
-
       {track && (
         <div className="stacked-actions">
-          <button className="secondary-action" onClick={onResetControls} disabled={busy}>
+          <button className="secondary-action" onClick={onResetControls} disabled={busy || playing || !canPreview}>
+            <RotateCcw size={18} />
             Сбросить ручки
           </button>
           <button className="secondary-action" onClick={onStartOver} disabled={busy}>

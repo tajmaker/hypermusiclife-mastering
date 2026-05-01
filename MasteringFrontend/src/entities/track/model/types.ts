@@ -8,6 +8,24 @@ export type TrackStatus =
 
 export type StemName = "vocals" | "drums" | "bass" | "other";
 
+export type JobStage =
+  | "upload_saved"
+  | "queued_separation"
+  | "separating"
+  | "writing_stems"
+  | "preview_ready"
+  | "queued_render"
+  | "rendering_master"
+  | "master_ready"
+  | "failed";
+
+export type JobEvent = {
+  stage: JobStage;
+  message: string;
+  progress: number | null;
+  created_at: string;
+};
+
 export type TrackRecord = {
   track_id: string;
   status: TrackStatus;
@@ -18,6 +36,10 @@ export type TrackRecord = {
   output_path: string | null;
   report_path: string | null;
   error_message: string | null;
+  stage?: JobStage | null;
+  progress?: number | null;
+  progress_detail?: string | null;
+  events?: JobEvent[];
   created_at: string;
   updated_at: string;
   urls: {
@@ -43,7 +65,7 @@ export function statusLabel(status: TrackStatus | "waiting"): string {
     uploaded: "Файл загружен",
     separating: "Подготовка стемов",
     ready_to_mix: "Готово к миксу",
-    rendering: "Рендер мастера",
+    rendering: "Подготовка мастера",
     done: "Готово",
     failed: "Ошибка",
   };

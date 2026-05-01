@@ -9,11 +9,13 @@ import {
 } from "../../entities/mastering/model/controls";
 import { stemVisuals } from "../../entities/track/model/stems";
 import { stemNames, type StemName } from "../../entities/track/model/types";
+import { assetUrl } from "../../shared/api/http";
 
 type Props = {
   busy: boolean;
   canRender: boolean;
   controls: MasteringControls;
+  downloadUrl: string | null;
   mixMode: MixMode;
   stemState: StemControlState;
   onChange: (controls: MasteringControls) => void;
@@ -26,6 +28,7 @@ export function MixerPanel({
   busy,
   canRender,
   controls,
+  downloadUrl,
   mixMode,
   stemState,
   onChange,
@@ -53,10 +56,17 @@ export function MixerPanel({
             Это стартовый пресет микса/мастера, а не настройки разделения на стемы.
           </p>
         </div>
-        <button onClick={onRender} disabled={!canRender || busy}>
-          {busy ? <Loader2 className="spin" size={18} /> : <Download size={18} />}
-          Рендер
-        </button>
+        {downloadUrl ? (
+          <a className="download primary-action" href={assetUrl(downloadUrl)}>
+            <Download size={18} />
+            Скачать мастер
+          </a>
+        ) : (
+          <button onClick={onRender} disabled={!canRender || busy}>
+            {busy ? <Loader2 className="spin" size={18} /> : <Download size={18} />}
+            {busy ? "Готовим мастер" : "Получить мастер"}
+          </button>
+        )}
       </div>
 
       <div className="mode-switch" aria-label="Режим микса">
@@ -70,7 +80,7 @@ export function MixerPanel({
       <p className="mode-hint">
         {mixMode === "delta"
           ? "Safe сохраняет оригинальный микс как основу и добавляет контролируемые правки по стемам."
-          : "Creative пересобирает трек из стемов, поэтому solo, mute и сильные уровни работают по-настоящему."}
+          : "Creative пересобирает трек из стемов, поэтому Solo, Mute и сильные уровни работают по-настоящему."}
       </p>
 
       {mixMode === "full" && (

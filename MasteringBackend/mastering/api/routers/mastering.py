@@ -1,18 +1,36 @@
 from pathlib import Path
 
 try:
-    from fastapi import APIRouter, File, HTTPException, UploadFile
+    from fastapi import APIRouter, File, Header, HTTPException, Response, UploadFile
     from fastapi.responses import FileResponse
 except Exception:  # pragma: no cover
     APIRouter = None
 
 if APIRouter is not None:
     from mastering.api.schemas.tracks import RenderRequest, StemRebalanceRequest
-    from mastering.application.track_jobs import RenderParams, STEM_NAMES, TrackJobService
+    from mastering.application.track_payloads import track_to_payload
+    from mastering.application.track_jobs import TrackJobService
+    from mastering.config import SETTINGS
+    from mastering.jobs.models import RenderParams, STEM_NAMES
+    from mastering.jobs.runner import JobQueueFullError
+    from mastering.storage.track_storage import UploadRejectedError
     from mastering.stems.rebalance_master import PRESETS, process_rebalance_master
 
     router = APIRouter(tags=["mastering"])
-    track_jobs = TrackJobService(root_dir=Path("hosted_runs"), max_workers=1)
+    track_jobs = TrackJobService(root_dir=Path("hosted_runs"))
+    MULTIPART_UPLOAD_OVERHEAD_BYTES = 2 * 1024 * 1024
+
+    @router.get("/health")
+    async def health() -> dict:
+        return {"status": "ok", **track_jobs.health()}
+
+    @router.get("/ready")
+    async def ready() -> dict:
+        try:
+            track_jobs.ensure_ready()
+        except JobQueueFullError as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        return {"status": "ready", **track_jobs.health()}
 
     @router.post("/jobs")
     async def create_mastering_job() -> dict:
@@ -65,19 +83,47 @@ if APIRouter is not None:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @router.post("/tracks")
-    async def upload_track(file: UploadFile = File(...), model: str = "mdx_extra") -> dict:
+    async def upload_track(
+        file: UploadFile = File(...),
+        model: str = "mdx_extra",
+        content_length: int | None = Header(default=None),
+    ) -> dict:
+        max_bytes = SETTINGS.max_upload_size_mb * 1024 * 1024
+        # Content-Length describes the whole multipart request, not only the file.
+        # The streaming writer below remains the authoritative file-size limit.
+        if content_length is not None and content_length > max_bytes + MULTIPART_UPLOAD_OVERHEAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File is too large. Limit is {SETTINGS.max_upload_size_mb} MB",
+            )
+
         try:
+            track_jobs.cleanup_expired_tracks()
             record = track_jobs.create_track(file.file, file.filename, model=model)
-            return track_jobs.to_payload(record)
+            return track_to_payload(record, track_jobs.storage)
+        except JobQueueFullError as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        except UploadRejectedError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @router.get("/tracks/{track_id}")
     async def get_track(track_id: str) -> dict:
         try:
-            return track_jobs.to_payload(track_jobs.require_track(track_id))
+            return track_to_payload(track_jobs.require_track(track_id), track_jobs.storage)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Track not found") from exc
+
+    @router.delete("/tracks/{track_id}", status_code=204)
+    async def delete_track(track_id: str) -> Response:
+        try:
+            track_jobs.delete_track(track_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Track not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return Response(status_code=204)
 
     @router.get("/tracks/{track_id}/audio/original")
     async def get_original_audio(track_id: str) -> FileResponse:
@@ -122,7 +168,10 @@ if APIRouter is not None:
             mix_mode=request.mix_mode,
             skip_final_master=request.skip_final_master,
         )
-        return track_jobs.to_payload(track_jobs.render_track(track_id, params))
+        try:
+            return track_to_payload(track_jobs.render_track(track_id, params), track_jobs.storage)
+        except JobQueueFullError as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
 
     @router.get("/tracks/{track_id}/download")
     async def download_track(track_id: str) -> FileResponse:

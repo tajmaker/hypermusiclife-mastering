@@ -21,7 +21,24 @@ function apiOrigin(): string {
 export async function parseJsonResponse<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.detail || `HTTP ${response.status}`);
+    throw new Error(extractErrorMessage(payload, response.status));
   }
   return payload as T;
+}
+
+function extractErrorMessage(payload: unknown, status: number): string {
+  if (isObject(payload)) {
+    const error = payload.error;
+    if (isObject(error) && typeof error.message === "string") {
+      return error.message;
+    }
+    if (typeof payload.detail === "string") {
+      return payload.detail;
+    }
+  }
+  return `HTTP ${status}`;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

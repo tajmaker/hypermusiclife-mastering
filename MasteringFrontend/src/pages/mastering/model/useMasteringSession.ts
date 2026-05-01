@@ -8,14 +8,22 @@ import {
   type StemControlState,
 } from "../../../entities/mastering/model/controls";
 import { fetchTrack } from "../../../entities/track/api/trackApi";
-import { isMixReady, type TrackRecord } from "../../../entities/track/model/types";
-import { StemMixer } from "../../../features/liveStemMix/lib/StemMixer";
+import { isMixReady, type JobStage, type TrackRecord } from "../../../entities/track/model/types";
+import { StemMixer, type PlaybackSource } from "../../../features/liveStemMix/lib/StemMixer";
 import { renderTrack } from "../../../features/trackRender/api/renderTrack";
 import { uploadTrack } from "../../../features/trackUpload/api/uploadTrack";
 import { validateAudioFile } from "../../../features/trackUpload/lib/validateAudioFile";
 
 const INITIAL_MESSAGE = "Загрузите WAV/MP3 и дождитесь подготовки микса.";
 const POLL_INTERVAL_MS = 3500;
+
+export type SessionProgress = {
+  detail: string;
+  indeterminate: boolean;
+  progress: number;
+  title: string;
+  tone: "idle" | "active" | "ready" | "failed";
+};
 
 export function useMasteringSession() {
   const [track, setTrack] = useState<TrackRecord | null>(null);
@@ -26,6 +34,8 @@ export function useMasteringSession() {
   const [message, setMessage] = useState(INITIAL_MESSAGE);
   const [busy, setBusy] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [playbackSource, setPlaybackSource] = useState<PlaybackSource>("mix");
+  const [playbackRevision, setPlaybackRevision] = useState(0);
   const [mixerReady, setMixerReady] = useState(false);
   const mixer = useRef(new StemMixer());
   const mountedRef = useRef(true);
@@ -65,6 +75,10 @@ export function useMasteringSession() {
   const canRender =
     mixerReady && !busy && Boolean(track && track.status !== "rendering" && track.status !== "separating");
   const readPlaybackSnapshot = useCallback(() => mixer.current.getSnapshot(), []);
+  const progress = useMemo(
+    () => buildProgress(track, mixerReady, busy, message),
+    [busy, message, mixerReady, track],
+  );
 
   useEffect(() => {
     if (!track || isMixReady(track.status) || track.status === "failed") {
@@ -88,8 +102,8 @@ export function useMasteringSession() {
   }, [track]);
 
   useEffect(() => {
-    mixer.current.applyControls(effectiveControls);
-  }, [effectiveControls]);
+    mixer.current.applyControls(effectiveControls, playbackSource);
+  }, [effectiveControls, playbackSource]);
 
   useEffect(() => {
     if (!track || track.status !== "ready_to_mix" || mixerReady) {
@@ -98,7 +112,7 @@ export function useMasteringSession() {
 
     const loadToken = loadTokenRef.current + 1;
     loadTokenRef.current = loadToken;
-    setMessage("Стемы готовы. Загружаю их в браузер для живого управления.");
+    setMessage("Стемы готовы. Загружаю оригинал и preview в браузер.");
     mixer.current
       .load(track)
       .then(() => {
@@ -111,7 +125,7 @@ export function useMasteringSession() {
           setMessage("Preview загружен частично: часть стемов недоступна. Можно слушать и двигать ручки.");
           return;
         }
-        setMessage("Нажмите Play и двигайте ручки во время прослушивания.");
+        setMessage("Нажмите Play, сравните оригинал и preview, затем двигайте ручки во время прослушивания.");
       })
       .catch((error: unknown) => {
         if (mountedRef.current && loadTokenRef.current === loadToken) {
@@ -132,6 +146,7 @@ export function useMasteringSession() {
     setBusy(true);
     setFileName(file.name);
     setMixerReady(false);
+    setPlaybackSource("mix");
     loadTokenRef.current += 1;
     setStemState(defaultStemControlState);
     mixer.current.stop();
@@ -160,15 +175,39 @@ export function useMasteringSession() {
     if (playing) {
       mixer.current.pause();
       setPlaying(false);
+      setPlaybackRevision((current) => current + 1);
       return;
     }
 
-    setPlaying(mixer.current.play(effectiveControls));
+    setPlaying(mixer.current.play(effectiveControls, playbackSource));
   }
 
   function resetPlayback() {
     mixer.current.stop();
     setPlaying(false);
+    setPlaybackRevision((current) => current + 1);
+  }
+
+  function seekPlayback(position: number) {
+    if (!mixerReady) return;
+    mixer.current.seek(position, effectiveControls, playbackSource);
+    setPlaybackRevision((current) => current + 1);
+  }
+
+  function changePlaybackSource(source: PlaybackSource) {
+    if (source === playbackSource) return;
+
+    const wasPlaying = playing;
+    const currentPosition = mixer.current.getSnapshot().position;
+    mixer.current.pause();
+    setPlaybackSource(source);
+    mixer.current.seek(currentPosition, effectiveControls, source);
+    if (wasPlaying) {
+      setPlaying(mixer.current.play(effectiveControls, source));
+      return;
+    }
+    setPlaying(false);
+    setPlaybackRevision((current) => current + 1);
   }
 
   function startOver() {
@@ -177,6 +216,7 @@ export function useMasteringSession() {
     setTrack(null);
     setFileName(null);
     setPlaying(false);
+    setPlaybackSource("mix");
     setMixerReady(false);
     setControls(defaultControls);
     setStemState(defaultStemControlState);
@@ -209,7 +249,7 @@ export function useMasteringSession() {
     if (!track || track.status === "rendering" || track.status === "separating") return;
 
     setBusy(true);
-    setMessage("Рендерю финальный мастер с текущими ручками.");
+    setMessage("Готовлю финальный мастер с текущими ручками.");
 
     try {
       const updated = await renderTrack(track.track_id, effectiveControls, mixMode);
@@ -238,7 +278,10 @@ export function useMasteringSession() {
       message,
       mixerReady,
       mixMode,
+      playbackSource,
+      playbackRevision,
       playing,
+      progress,
       readPlaybackSnapshot,
       stemState,
       track,
@@ -247,15 +290,208 @@ export function useMasteringSession() {
     actions: {
       changeControls: setControls,
       changeMixMode,
+      changePlaybackSource,
       changeStemState: setStemState,
       render,
       resetControls,
       resetPlayback,
+      seekPlayback,
       startOver,
       togglePlayback,
       upload,
     },
   };
+}
+
+function buildProgress(
+  track: TrackRecord | null,
+  mixerReady: boolean,
+  busy: boolean,
+  message: string,
+): SessionProgress {
+  if (!track && busy) {
+    return {
+      detail: "Файл передается на сервер. После загрузки автоматически начнется подготовка стемов.",
+      indeterminate: true,
+      progress: 20,
+      title: "Загрузка трека",
+      tone: "active",
+    };
+  }
+
+  if (!track) {
+    return {
+      detail: "Выберите аудиофайл, после этого начнется подготовка preview.",
+      indeterminate: false,
+      progress: 0,
+      title: "Ожидание файла",
+      tone: "idle",
+    };
+  }
+
+  const backendProgress = progressFromBackend(track);
+  if (backendProgress) {
+    if (track.status === "ready_to_mix" && !mixerReady) {
+      return {
+        detail: "Стемы готовы на сервере, загружаю их в браузер для живого preview.",
+        indeterminate: true,
+        progress: Math.max(backendProgress.progress, 85),
+        title: "Загрузка preview",
+        tone: "active",
+      };
+    }
+    return backendProgress;
+  }
+
+  if (track.status === "failed") {
+    return {
+      detail: track.error_message || message,
+      indeterminate: false,
+      progress: 100,
+      title: "Ошибка обработки",
+      tone: "failed",
+    };
+  }
+
+  if (busy && track.status !== "rendering") {
+    return {
+      detail: "Файл передается на сервер. Следующий шаг запустится автоматически.",
+      indeterminate: true,
+      progress: 20,
+      title: "Загрузка трека",
+      tone: "active",
+    };
+  }
+
+  if (track.status === "uploaded" || track.status === "separating") {
+    return {
+      detail: "Сервер разделяет трек на вокал, барабаны, бас и музыку. На бесплатном CPU это может занять несколько минут.",
+      indeterminate: true,
+      progress: 55,
+      title: "Подготовка стемов",
+      tone: "active",
+    };
+  }
+
+  if (track.status === "ready_to_mix" && !mixerReady) {
+    return {
+      detail: "Стемы готовы на сервере, загружаю их в браузер для живого preview.",
+      indeterminate: true,
+      progress: 85,
+      title: "Загрузка preview",
+      tone: "active",
+    };
+  }
+
+  if (track.status === "rendering") {
+    return {
+      detail: "Собираю финальный мастер с текущими ручками.",
+      indeterminate: true,
+      progress: 60,
+      title: "Подготовка мастера",
+      tone: "active",
+    };
+  }
+
+  if (track.status === "done") {
+    return {
+      detail: "Финальный файл готов. Можно скачать мастер или начать заново.",
+      indeterminate: false,
+      progress: 100,
+      title: "Мастер готов",
+      tone: "ready",
+    };
+  }
+
+  return {
+    detail: "Preview готов: можно слушать оригинал, stem-preview, крутить ручки и получить мастер.",
+    indeterminate: false,
+    progress: 100,
+    title: "Готово к миксу",
+    tone: "ready",
+  };
+}
+
+function progressFromBackend(track: TrackRecord): SessionProgress | null {
+  const hasBackendProgress = Boolean(track.stage || track.progress != null || track.progress_detail);
+  if (!hasBackendProgress) {
+    return null;
+  }
+
+  const stage = track.stage ?? null;
+  const progress = track.progress ?? fallbackProgressForStage(stage, track.status);
+  const detail = track.error_message || track.progress_detail || "Обновляю состояние задачи.";
+  const title = stage ? titleForStage(stage) : fallbackTitleForStatus(track.status);
+  const tone = toneForStage(stage, track.status);
+
+  return {
+    detail,
+    indeterminate: tone === "active" && progress < 100,
+    progress,
+    title,
+    tone,
+  };
+}
+
+function titleForStage(stage: JobStage): string {
+  const titles: Record<JobStage, string> = {
+    upload_saved: "Файл загружен",
+    queued_separation: "Ожидание разделения",
+    separating: "Подготовка стемов",
+    writing_stems: "Сохранение стемов",
+    preview_ready: "Готово к миксу",
+    queued_render: "Мастер в очереди",
+    rendering_master: "Подготовка мастера",
+    master_ready: "Мастер готов",
+    failed: "Ошибка обработки",
+  };
+  return titles[stage];
+}
+
+function fallbackTitleForStatus(status: TrackRecord["status"]): string {
+  const titles: Record<TrackRecord["status"], string> = {
+    uploaded: "Файл загружен",
+    separating: "Подготовка стемов",
+    ready_to_mix: "Готово к миксу",
+    rendering: "Подготовка мастера",
+    done: "Мастер готов",
+    failed: "Ошибка обработки",
+  };
+  return titles[status];
+}
+
+function toneForStage(stage: JobStage | null, status: TrackRecord["status"]): SessionProgress["tone"] {
+  if (stage === "failed" || status === "failed") return "failed";
+  if (stage === "master_ready" || status === "done") return "ready";
+  if (stage === "preview_ready" || status === "ready_to_mix") return "ready";
+  return "active";
+}
+
+function fallbackProgressForStage(stage: JobStage | null, status: TrackRecord["status"]): number {
+  if (!stage) {
+    const byStatus: Record<TrackRecord["status"], number> = {
+      uploaded: 15,
+      separating: 45,
+      ready_to_mix: 70,
+      rendering: 82,
+      done: 100,
+      failed: 100,
+    };
+    return byStatus[status];
+  }
+
+  const byStage: Record<JobStage, number> = {
+    upload_saved: 15,
+    queued_separation: 20,
+    separating: 35,
+    writing_stems: 62,
+    preview_ready: 70,
+    queued_render: 72,
+    rendering_master: 82,
+    master_ready: 100,
+    failed: 100,
+  };
+  return byStage[stage];
 }
 
 function clamp(value: number, min: number, max: number): number {

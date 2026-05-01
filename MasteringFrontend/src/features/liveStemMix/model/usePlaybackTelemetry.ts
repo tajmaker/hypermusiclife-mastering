@@ -4,9 +4,10 @@ import type { PlaybackSnapshot } from "../lib/StemMixer";
 type Params = {
   enabled: boolean;
   readSnapshot: () => PlaybackSnapshot;
+  refreshKey?: number;
 };
 
-export function usePlaybackTelemetry({enabled, readSnapshot}: Params): PlaybackSnapshot {
+export function usePlaybackTelemetry({enabled, readSnapshot, refreshKey = 0}: Params): PlaybackSnapshot {
   const [snapshot, setSnapshot] = useState(readSnapshot);
   const readSnapshotRef = useRef(readSnapshot);
   readSnapshotRef.current = readSnapshot;
@@ -32,7 +33,7 @@ export function usePlaybackTelemetry({enabled, readSnapshot}: Params): PlaybackS
       disposed = true;
       window.cancelAnimationFrame(frameId);
     };
-  }, [enabled]);
+  }, [enabled, refreshKey]);
 
   return snapshot;
 }

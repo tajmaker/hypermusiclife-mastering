@@ -19,28 +19,34 @@ export function MasteringPage() {
           fileName={state.fileName}
           message={state.message}
           playing={state.playing}
+          progress={state.progress}
           track={state.track}
           uploadDisabled={state.uploadDisabled}
           onStartOver={actions.startOver}
           onUpload={actions.upload}
           onResetControls={actions.resetControls}
-          onTogglePlayback={actions.togglePlayback}
-          onResetPlayback={actions.resetPlayback}
         />
         <AudioScene
           controls={state.controls}
           fileName={state.fileName}
           mixerReady={state.mixerReady}
           mixMode={state.mixMode}
+          playbackRevision={state.playbackRevision}
+          playbackSource={state.playbackSource}
           playing={state.playing}
           readPlaybackSnapshot={state.readPlaybackSnapshot}
           stemState={state.stemState}
           track={state.track}
+          onPlaybackSourceChange={actions.changePlaybackSource}
+          onResetPlayback={actions.resetPlayback}
+          onSeek={actions.seekPlayback}
+          onTogglePlayback={actions.togglePlayback}
         />
         <MixerPanel
           busy={state.busy}
           canRender={state.canRender}
           controls={state.controls}
+          downloadUrl={state.track?.urls.download || null}
           mixMode={state.mixMode}
           stemState={state.stemState}
           onChange={actions.changeControls}
