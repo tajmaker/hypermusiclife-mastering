@@ -5,11 +5,13 @@ from threading import Lock
 from typing import BinaryIO
 
 from mastering.config import SETTINGS
+from mastering.domain.analyzer import analyze_track
 from mastering.jobs.models import JobEvent, JobStage, RenderParams, TrackRecord, TrackStatus
 from mastering.jobs.repository import FileTrackRepository
 from mastering.jobs.runner import JobQueueFullError, LocalJobRunner
 from mastering.stems.rebalance_master import process_rebalance_master
 from mastering.stems.stem_lab import _run_demucs
+from mastering.storage.audio_io import read_audio
 from mastering.storage.track_storage import TrackStorage
 
 ACTIVE_STATUSES: tuple[TrackStatus, ...] = ("uploaded", "separating", "rendering")
@@ -54,6 +56,7 @@ class TrackJobService:
                 original_path=str(upload.original_path),
                 work_dir=str(upload.work_dir),
                 model=model,
+                original_lufs=self._analyze_lufs(upload.original_path),
             )
             self._set_progress(
                 record,
@@ -92,6 +95,8 @@ class TrackJobService:
 
                 record.output_path = None
                 record.report_path = None
+                record.rendered_lufs = None
+                record.lufs_delta = None
                 self._set_status(
                     record,
                     "rendering",
@@ -218,6 +223,9 @@ class TrackJobService:
             )
             record.output_path = result["output"]
             record.report_path = result["report"]
+            record.rendered_lufs = self._analyze_lufs(Path(result["output"]))
+            if record.original_lufs is not None and record.rendered_lufs is not None:
+                record.lufs_delta = record.rendered_lufs - record.original_lufs
             self._set_status(
                 record,
                 "done",
@@ -226,9 +234,10 @@ class TrackJobService:
                 progress_detail="Master is ready to download.",
             )
         except Exception as exc:
+            fallback_status: TrackStatus = "ready_to_mix" if record.stems_dir else "failed"
             self._set_status(
                 record,
-                "failed",
+                fallback_status,
                 str(exc),
                 stage="failed",
                 progress=100,
@@ -312,6 +321,13 @@ class TrackJobService:
         if parsed.tzinfo is None:
             return parsed.replace(tzinfo=timezone.utc)
         return parsed.astimezone(timezone.utc)
+
+    def _analyze_lufs(self, path: Path) -> float | None:
+        try:
+            audio, sample_rate = read_audio(str(path))
+            return analyze_track(audio, sample_rate).lufs
+        except Exception:
+            return None
 
     def _lock_for(self, track_id: str) -> Lock:
         with self._locks_guard:

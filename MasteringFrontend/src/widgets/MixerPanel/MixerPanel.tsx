@@ -21,6 +21,7 @@ type Props = {
   controls: MasteringControls;
   downloadUrl: string | null;
   eqBandsByStem: StemEqBands;
+  isRenderDirty: boolean;
   mixMode: MixMode;
   stemState: StemControlState;
   onChange: (controls: MasteringControls) => void;
@@ -36,6 +37,7 @@ export function MixerPanel({
   controls,
   downloadUrl,
   eqBandsByStem,
+  isRenderDirty,
   mixMode,
   stemState,
   onChange,
@@ -111,7 +113,7 @@ export function MixerPanel({
         ) : (
           <button onClick={onRender} disabled={!canRender || busy}>
             {busy ? <Loader2 className="spin" size={18} /> : <Download size={18} />}
-            {busy ? "Готовим мастер" : "Получить мастер"}
+            {busy ? "Готовим мастер" : isRenderDirty ? "Скачать обновленный трек" : "Получить мастер"}
           </button>
         )}
       </div>

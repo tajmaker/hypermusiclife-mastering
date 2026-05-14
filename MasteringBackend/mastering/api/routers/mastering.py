@@ -20,6 +20,21 @@ if APIRouter is not None:
     track_jobs = TrackJobService(root_dir=Path("hosted_runs"))
     MULTIPART_UPLOAD_OVERHEAD_BYTES = 2 * 1024 * 1024
 
+    def _validate_mix_project(request: RenderRequest | StemRebalanceRequest) -> None:
+        if request.mix_project is None:
+            return
+        if request.mix_project.mode != request.mix_mode:
+            raise HTTPException(status_code=400, detail="mix_project.mode must match mix_mode")
+        if request.mix_mode == "delta":
+            has_solo_or_mute = any(
+                stem.solo or stem.muted for stem in request.mix_project.stems.values()
+            )
+            if has_solo_or_mute:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Solo and mute are only supported in full mix mode",
+                )
+
     @router.get("/health")
     async def health() -> dict:
         return {"status": "ok", **track_jobs.health()}
@@ -64,6 +79,7 @@ if APIRouter is not None:
     async def create_stem_rebalance(request: StemRebalanceRequest) -> dict:
         if request.profile not in PRESETS:
             raise HTTPException(status_code=400, detail=f"Unknown profile: {request.profile}")
+        _validate_mix_project(request)
 
         try:
             return process_rebalance_master(
@@ -154,6 +170,7 @@ if APIRouter is not None:
     async def render_track(track_id: str, request: RenderRequest) -> dict:
         if request.profile not in PRESETS:
             raise HTTPException(status_code=400, detail=f"Unknown profile: {request.profile}")
+        _validate_mix_project(request)
 
         try:
             record = track_jobs.require_track(track_id)

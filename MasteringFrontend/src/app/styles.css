@@ -847,6 +847,38 @@ h2 {
   white-space: nowrap;
 }
 
+.loudness-card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  border: 1px solid rgba(239, 210, 156, 0.24);
+  border-radius: 8px;
+  padding: 10px;
+  background:
+    linear-gradient(135deg, rgba(239, 210, 156, 0.12), rgba(255, 255, 255, 0.025)),
+    rgba(255, 255, 255, 0.035);
+}
+
+.loudness-card div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.loudness-card span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.loudness-card strong {
+  color: var(--text);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
 .progress-card {
   display: grid;
   gap: 8px;
@@ -1361,6 +1393,10 @@ input[type="range"] {
   .track-summary strong {
     max-width: 100%;
     text-align: left;
+  }
+
+  .loudness-card {
+    grid-template-columns: 1fr;
   }
 
   .stem-eq__tabs,

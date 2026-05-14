@@ -15,4 +15,9 @@ def track_to_payload(record: TrackRecord, storage: TrackStorage) -> dict:
         },
         "download": f"/api/v1/tracks/{record.track_id}/download" if record.output_path else None,
     }
+    payload["metrics"] = {
+        "original_lufs": record.original_lufs,
+        "rendered_lufs": record.rendered_lufs,
+        "lufs_delta": record.lufs_delta,
+    }
     return payload

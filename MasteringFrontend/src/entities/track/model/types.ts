@@ -42,6 +42,11 @@ export type TrackRecord = {
   events?: JobEvent[];
   created_at: string;
   updated_at: string;
+  metrics?: {
+    original_lufs: number | null;
+    rendered_lufs: number | null;
+    lufs_delta: number | null;
+  };
   urls: {
     original: string;
     stems: Partial<Record<StemName, string>>;

@@ -45,6 +45,9 @@ class TrackRecord:
     stage: JobStage | None = None
     progress: int | None = None
     progress_detail: str | None = None
+    original_lufs: float | None = None
+    rendered_lufs: float | None = None
+    lufs_delta: float | None = None
     events: list[JobEvent] = field(default_factory=list)
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)

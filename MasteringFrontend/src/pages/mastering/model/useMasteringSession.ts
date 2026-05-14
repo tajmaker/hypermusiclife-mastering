@@ -41,6 +41,8 @@ export function useMasteringSession() {
   const [playbackSource, setPlaybackSource] = useState<PlaybackSource>("mix");
   const [playbackRevision, setPlaybackRevision] = useState(0);
   const [mixerReady, setMixerReady] = useState(false);
+  const [pendingRenderSignature, setPendingRenderSignature] = useState<string | null>(null);
+  const [renderedSignature, setRenderedSignature] = useState<string | null>(null);
   const mixer = useRef(new StemMixer());
   const mountedRef = useRef(true);
   const loadTokenRef = useRef(0);
@@ -68,6 +70,10 @@ export function useMasteringSession() {
     () => buildMixProjectFromControls(controls, stemState, mixMode, eqBandsByStem),
     [controls, eqBandsByStem, mixMode, stemState],
   );
+  const renderSignature = useMemo(
+    () => JSON.stringify({controls: effectiveControls, mixMode, mixProject}),
+    [effectiveControls, mixMode, mixProject],
+  );
 
   const activeStage = useMemo(() => {
     if (!track) return 0;
@@ -81,7 +87,8 @@ export function useMasteringSession() {
   const uploadDisabled = busy || Boolean(track && track.status !== "failed");
   const canPreview = mixerReady;
   const canRender =
-    mixerReady && !busy && Boolean(track && track.status !== "rendering" && track.status !== "separating");
+    mixerReady && !busy && Boolean(track && (track.status === "ready_to_mix" || track.status === "done"));
+  const isRenderDirty = Boolean(track?.urls.download && renderedSignature !== renderSignature);
   const readPlaybackSnapshot = useCallback(() => mixer.current.getSnapshot(), []);
   const progress = useMemo(
     () => buildProgress(track, mixerReady, busy, message),
@@ -108,6 +115,13 @@ export function useMasteringSession() {
 
     return () => window.clearInterval(timer);
   }, [track]);
+
+  useEffect(() => {
+    if (track?.status === "done" && track.urls.download && pendingRenderSignature) {
+      setRenderedSignature(pendingRenderSignature);
+      setPendingRenderSignature(null);
+    }
+  }, [pendingRenderSignature, track]);
 
   useEffect(() => {
     mixer.current.applyControls(effectiveControls, playbackSource, mixProject);
@@ -155,6 +169,8 @@ export function useMasteringSession() {
     setFileName(file.name);
     setMixerReady(false);
     setPlaybackSource("mix");
+    setPendingRenderSignature(null);
+    setRenderedSignature(null);
     loadTokenRef.current += 1;
     setStemState(defaultStemControlState);
     setEqBandsByStem(defaultStemEqBands);
@@ -231,6 +247,8 @@ export function useMasteringSession() {
     setStemState(defaultStemControlState);
     setEqBandsByStem(defaultStemEqBands);
     setMixMode("delta");
+    setPendingRenderSignature(null);
+    setRenderedSignature(null);
     setMessage(INITIAL_MESSAGE);
   }
 
@@ -257,10 +275,11 @@ export function useMasteringSession() {
   }
 
   async function render() {
-    if (!track || track.status === "rendering" || track.status === "separating") return;
+    if (!track || !canRender) return;
 
     setBusy(true);
     setMessage("Готовлю финальный мастер с текущими ручками.");
+    setPendingRenderSignature(renderSignature);
 
     try {
       const updated = await renderTrack(track.track_id, effectiveControls, mixMode, mixProject);
@@ -270,6 +289,7 @@ export function useMasteringSession() {
     } catch (error: unknown) {
       if (mountedRef.current) {
         setMessage(String(error));
+        setPendingRenderSignature(null);
       }
     } finally {
       if (mountedRef.current) {
@@ -287,6 +307,7 @@ export function useMasteringSession() {
       controls,
       eqBandsByStem,
       fileName,
+      isRenderDirty,
       message,
       mixerReady,
       mixMode,

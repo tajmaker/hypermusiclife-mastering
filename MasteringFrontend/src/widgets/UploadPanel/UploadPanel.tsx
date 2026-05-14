@@ -52,6 +52,21 @@ export function UploadPanel({
         <strong>{label}</strong>
       </div>
 
+      <div className="loudness-card">
+        <div>
+          <span>Original</span>
+          <strong>{formatLufs(track?.metrics?.original_lufs)}</strong>
+        </div>
+        <div>
+          <span>Master</span>
+          <strong>{formatLufs(track?.metrics?.rendered_lufs)}</strong>
+        </div>
+        <div>
+          <span>Разница</span>
+          <strong>{formatDelta(track?.metrics?.lufs_delta)}</strong>
+        </div>
+      </div>
+
       <div className={`progress-card ${progress.tone}`}>
         <div className="progress-head">
           <span>{progress.title}</span>
@@ -81,4 +96,19 @@ export function UploadPanel({
       )}
     </div>
   );
+}
+
+function formatLufs(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "—";
+  }
+  return `${value.toFixed(1)} LUFS`;
+}
+
+function formatDelta(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "—";
+  }
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(1)} LUFS`;
 }

@@ -46,8 +46,9 @@ export function MasteringPage() {
           busy={state.busy}
           canRender={state.canRender}
           controls={state.controls}
-          downloadUrl={state.track?.urls.download || null}
+          downloadUrl={state.isRenderDirty ? null : state.track?.urls.download || null}
           eqBandsByStem={state.eqBandsByStem}
+          isRenderDirty={state.isRenderDirty}
           mixMode={state.mixMode}
           stemState={state.stemState}
           onChange={actions.changeControls}
