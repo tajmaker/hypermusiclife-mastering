@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyStemState,
+  buildMixProjectFromControls,
   defaultControls,
+  defaultStemEqBands,
   defaultStemControlState,
   type MasteringControls,
   type MixMode,
+  type StemEqBands,
   type StemControlState,
 } from "../../../entities/mastering/model/controls";
 import { fetchTrack } from "../../../entities/track/api/trackApi";
@@ -30,6 +33,7 @@ export function useMasteringSession() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [controls, setControls] = useState<MasteringControls>(defaultControls);
   const [stemState, setStemState] = useState<StemControlState>(defaultStemControlState);
+  const [eqBandsByStem, setEqBandsByStem] = useState<StemEqBands>(defaultStemEqBands);
   const [mixMode, setMixMode] = useState<MixMode>("delta");
   const [message, setMessage] = useState(INITIAL_MESSAGE);
   const [busy, setBusy] = useState(false);
@@ -59,6 +63,10 @@ export function useMasteringSession() {
   const effectiveControls = useMemo(
     () => (mixMode === "full" ? applyStemState(controls, stemState) : controls),
     [controls, mixMode, stemState],
+  );
+  const mixProject = useMemo(
+    () => buildMixProjectFromControls(controls, stemState, mixMode, eqBandsByStem),
+    [controls, eqBandsByStem, mixMode, stemState],
   );
 
   const activeStage = useMemo(() => {
@@ -102,8 +110,8 @@ export function useMasteringSession() {
   }, [track]);
 
   useEffect(() => {
-    mixer.current.applyControls(effectiveControls, playbackSource);
-  }, [effectiveControls, playbackSource]);
+    mixer.current.applyControls(effectiveControls, playbackSource, mixProject);
+  }, [effectiveControls, mixProject, playbackSource]);
 
   useEffect(() => {
     if (!track || track.status !== "ready_to_mix" || mixerReady) {
@@ -149,6 +157,7 @@ export function useMasteringSession() {
     setPlaybackSource("mix");
     loadTokenRef.current += 1;
     setStemState(defaultStemControlState);
+    setEqBandsByStem(defaultStemEqBands);
     mixer.current.stop();
     setPlaying(false);
     setMessage("Загружаю трек и запускаю виртуальное разделение на стемы.");
@@ -179,7 +188,7 @@ export function useMasteringSession() {
       return;
     }
 
-    setPlaying(mixer.current.play(effectiveControls, playbackSource));
+    setPlaying(mixer.current.play(effectiveControls, playbackSource, mixProject));
   }
 
   function resetPlayback() {
@@ -190,7 +199,7 @@ export function useMasteringSession() {
 
   function seekPlayback(position: number) {
     if (!mixerReady) return;
-    mixer.current.seek(position, effectiveControls, playbackSource);
+    mixer.current.seek(position, effectiveControls, playbackSource, mixProject);
     setPlaybackRevision((current) => current + 1);
   }
 
@@ -201,9 +210,9 @@ export function useMasteringSession() {
     const currentPosition = mixer.current.getSnapshot().position;
     mixer.current.pause();
     setPlaybackSource(source);
-    mixer.current.seek(currentPosition, effectiveControls, source);
+    mixer.current.seek(currentPosition, effectiveControls, source, mixProject);
     if (wasPlaying) {
-      setPlaying(mixer.current.play(effectiveControls, source));
+      setPlaying(mixer.current.play(effectiveControls, source, mixProject));
       return;
     }
     setPlaying(false);
@@ -220,6 +229,7 @@ export function useMasteringSession() {
     setMixerReady(false);
     setControls(defaultControls);
     setStemState(defaultStemControlState);
+    setEqBandsByStem(defaultStemEqBands);
     setMixMode("delta");
     setMessage(INITIAL_MESSAGE);
   }
@@ -227,6 +237,7 @@ export function useMasteringSession() {
   function resetControls() {
     setControls(defaultControls);
     setStemState(defaultStemControlState);
+    setEqBandsByStem(defaultStemEqBands);
     setMixMode("delta");
     setMessage("Ручки сброшены в Safe-режим.");
   }
@@ -252,7 +263,7 @@ export function useMasteringSession() {
     setMessage("Готовлю финальный мастер с текущими ручками.");
 
     try {
-      const updated = await renderTrack(track.track_id, effectiveControls, mixMode);
+      const updated = await renderTrack(track.track_id, effectiveControls, mixMode, mixProject);
       if (mountedRef.current) {
         setTrack(updated);
       }
@@ -274,6 +285,7 @@ export function useMasteringSession() {
       canPreview,
       canRender,
       controls,
+      eqBandsByStem,
       fileName,
       message,
       mixerReady,
@@ -289,6 +301,7 @@ export function useMasteringSession() {
     },
     actions: {
       changeControls: setControls,
+      changeEqBandsByStem: setEqBandsByStem,
       changeMixMode,
       changePlaybackSource,
       changeStemState: setStemState,

@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from threading import Lock
 from typing import BinaryIO
 
 from mastering.config import SETTINGS
@@ -12,6 +13,11 @@ from mastering.stems.stem_lab import _run_demucs
 from mastering.storage.track_storage import TrackStorage
 
 ACTIVE_STATUSES: tuple[TrackStatus, ...] = ("uploaded", "separating", "rendering")
+RENDERABLE_STATUSES: tuple[TrackStatus, ...] = ("ready_to_mix", "done")
+
+
+class TrackStateError(RuntimeError):
+    pass
 
 
 class TrackJobService:
@@ -26,6 +32,8 @@ class TrackJobService:
         self.storage = TrackStorage(self.root_dir)
         self.runner = LocalJobRunner(max_workers=max_workers, max_queued_jobs=max_queued_jobs)
         self.tracks = self._load_tracks()
+        self._locks_guard = Lock()
+        self._track_locks: dict[str, Lock] = {track_id: Lock() for track_id in self.tracks}
         self.cleanup_expired_tracks()
 
     def create_track(
@@ -72,16 +80,25 @@ class TrackJobService:
         return self.tracks.get(track_id)
 
     def render_track(self, track_id: str, params: RenderParams) -> TrackRecord:
-        record = self.require_track(track_id)
         reservation = self.runner.reserve()
         try:
-            self._set_status(
-                record,
-                "rendering",
-                stage="queued_render",
-                progress=72,
-                progress_detail="Render queued with the current controls.",
-            )
+            lock = self._lock_for(track_id)
+            with lock:
+                record = self.require_track(track_id)
+                if record.status not in RENDERABLE_STATUSES:
+                    raise TrackStateError(f"Track is {record.status}")
+                if not record.stems_dir:
+                    raise TrackStateError("Track is not separated yet")
+
+                record.output_path = None
+                record.report_path = None
+                self._set_status(
+                    record,
+                    "rendering",
+                    stage="queued_render",
+                    progress=72,
+                    progress_detail="Render queued with the current controls.",
+                )
             reservation.submit(self._render_track, track_id, params)
             return record
         except Exception:
@@ -102,6 +119,7 @@ class TrackJobService:
         self.tracks.pop(track_id, None)
         self.repository.delete(track_id)
         self.storage.delete_track_dir(track_id)
+        self._forget_lock(track_id)
 
     def cleanup_expired_tracks(self, now: datetime | None = None) -> list[str]:
         now = now or datetime.now(timezone.utc)
@@ -116,6 +134,7 @@ class TrackJobService:
             self.tracks.pop(track_id, None)
             self.repository.delete(track_id)
             self.storage.delete_track_dir(track_id)
+            self._forget_lock(track_id)
             deleted.append(track_id)
 
         return deleted
@@ -194,6 +213,7 @@ class TrackJobService:
                 report_path=report_path,
                 skip_final_master=params.skip_final_master,
                 control_overrides=params.controls,
+                mix_project=params.mix_project,
                 mix_mode=params.mix_mode,
             )
             record.output_path = result["output"]
@@ -292,3 +312,15 @@ class TrackJobService:
         if parsed.tzinfo is None:
             return parsed.replace(tzinfo=timezone.utc)
         return parsed.astimezone(timezone.utc)
+
+    def _lock_for(self, track_id: str) -> Lock:
+        with self._locks_guard:
+            lock = self._track_locks.get(track_id)
+            if lock is None:
+                lock = Lock()
+                self._track_locks[track_id] = lock
+            return lock
+
+    def _forget_lock(self, track_id: str) -> None:
+        with self._locks_guard:
+            self._track_locks.pop(track_id, None)

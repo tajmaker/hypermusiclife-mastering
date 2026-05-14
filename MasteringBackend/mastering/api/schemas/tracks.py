@@ -7,6 +7,29 @@ except Exception:  # pragma: no cover
 
 
 if Field is not None:
+    StemName = Literal["vocals", "drums", "bass", "other"]
+    EqBandType = Literal["bell", "lowShelf", "highShelf", "highPass", "lowPass"]
+
+    class EqBand(BaseModel):
+        id: str
+        type: EqBandType = "bell"
+        frequency_hz: float = Field(ge=20.0, le=20000.0)
+        gain_db: float = Field(default=0.0, ge=-24.0, le=24.0)
+        q: float = Field(default=1.0, ge=0.1, le=24.0)
+        enabled: bool = True
+
+
+    class StemProcessing(BaseModel):
+        gain_db: float = Field(default=0.0, ge=-60.0, le=12.0)
+        muted: bool = False
+        solo: bool = False
+        eq_bands: list[EqBand] = Field(default_factory=list, max_items=8)
+
+
+    class MixProject(BaseModel):
+        mode: Literal["delta", "full"] = "delta"
+        stems: dict[StemName, StemProcessing]
+
 
     class RebalanceControls(BaseModel):
         vocal_gain: float | None = Field(default=None, ge=-60.0, le=12.0)
@@ -35,11 +58,13 @@ if Field is not None:
         keep_stems: bool = False
         mix_mode: Literal["delta", "full"] = "delta"
         controls: RebalanceControls | None = None
+        mix_project: MixProject | None = None
 
 
     class RenderRequest(BaseModel):
         profile: str = "safe"
         mastering_preset: str = "balanced"
         controls: RebalanceControls | None = None
+        mix_project: MixProject | None = None
         skip_final_master: bool = False
         mix_mode: Literal["delta", "full"] = "delta"

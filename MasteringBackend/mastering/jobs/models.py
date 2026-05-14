@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
 TrackStatus = Literal["uploaded", "separating", "ready_to_mix", "rendering", "done", "failed"]
 StemName = Literal["vocals", "drums", "bass", "other"]
@@ -55,5 +55,6 @@ class RenderParams:
     profile: str
     mastering_preset: str
     controls: dict[str, float]
+    mix_project: dict[str, Any] | None = None
     mix_mode: str = "delta"
     skip_final_master: bool = False

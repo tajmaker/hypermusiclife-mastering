@@ -1086,6 +1086,127 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 
+.stem-eq {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stem-eq__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.stem-eq__head h3 {
+  margin: 2px 0 0;
+  font-size: 17px;
+}
+
+.stem-eq__head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stem-eq__tabs,
+.stem-eq__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stem-eq__tabs button,
+.stem-eq__actions button {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.stem-eq__tabs button.active {
+  border-color: rgba(239, 210, 156, 0.76);
+  background: rgba(239, 210, 156, 0.15);
+  color: var(--text);
+}
+
+.stem-eq__bands {
+  display: grid;
+  gap: 10px;
+}
+
+.stem-eq__empty {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.eq-band {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.eq-band__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(92px, 128px) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.eq-band__top label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+}
+
+.eq-band__top select {
+  width: 100%;
+  min-width: 0;
+}
+
+.eq-band__remove {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.eq-control {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.7fr) minmax(0, 1.4fr) 78px;
+  align-items: center;
+  gap: 8px;
+}
+
+.eq-control span {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.eq-control input[type="range"] {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.eq-control output {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 input[type="range"] {
   grid-column: 1 / -1;
   grid-row: 2;
@@ -1239,6 +1360,17 @@ input[type="range"] {
 
   .track-summary strong {
     max-width: 100%;
+    text-align: left;
+  }
+
+  .stem-eq__tabs,
+  .stem-eq__actions,
+  .eq-band__top,
+  .eq-control {
+    grid-template-columns: 1fr;
+  }
+
+  .eq-control output {
     text-align: left;
   }
 

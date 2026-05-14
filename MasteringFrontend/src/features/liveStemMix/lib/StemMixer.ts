@@ -1,4 +1,4 @@
-import type { MasteringControls } from "../../../entities/mastering/model/controls";
+import type { EqBand, MasteringControls, MixProject } from "../../../entities/mastering/model/controls";
 import { stemNames, type StemName, type TrackRecord } from "../../../entities/track/model/types";
 import { assetUrl } from "../../../shared/api/http";
 
@@ -6,13 +6,15 @@ type StemChain = {
   stem: StemName | "original";
   source: AudioBufferSourceNode;
   gain: GainNode;
-  filter: BiquadFilterNode;
+  toneFilter: BiquadFilterNode;
+  eqFilters: BiquadFilterNode[];
   analyser: AnalyserNode;
   analyserData: Uint8Array<ArrayBuffer>;
 };
 
 export type MixerState = "empty" | "loading" | "ready" | "playing" | "disposed";
 export type PlaybackSource = "mix" | "original";
+const MAX_EQ_BANDS = 8;
 
 export type PlaybackSnapshot = {
   duration: number;
@@ -114,7 +116,11 @@ export class StemMixer {
     this.onPlaybackEnded = handler;
   }
 
-  play(controls: MasteringControls, source: PlaybackSource = this.playbackSource): boolean {
+  play(
+    controls: MasteringControls,
+    source: PlaybackSource = this.playbackSource,
+    mixProject?: MixProject,
+  ): boolean {
     if (!this.context || !this.hasAudio() || this.playing) {
       return false;
     }
@@ -137,15 +143,22 @@ export class StemMixer {
     this.chains = playableBuffers.map(([stem, buffer]) => {
       const sourceNode = this.context!.createBufferSource();
       const gain = this.context!.createGain();
-      const filter = this.context!.createBiquadFilter();
+      const toneFilter = this.context!.createBiquadFilter();
+      const eqFilters = Array.from({ length: MAX_EQ_BANDS }, () => this.context!.createBiquadFilter());
       const analyser = this.context!.createAnalyser();
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.78;
 
       sourceNode.buffer = buffer;
-      filter.type = "highshelf";
-      filter.frequency.value = stem === "other" ? 3200 : 4200;
-      sourceNode.connect(filter).connect(gain).connect(analyser).connect(this.context!.destination);
+      toneFilter.type = "highshelf";
+      toneFilter.frequency.value = stem === "other" ? 3200 : 4200;
+
+      let lastNode: AudioNode = sourceNode.connect(toneFilter);
+      for (const eqFilter of eqFilters) {
+        resetEqFilter(eqFilter);
+        lastNode = lastNode.connect(eqFilter);
+      }
+      lastNode.connect(gain).connect(analyser).connect(this.context!.destination);
       sourceNode.start(0, offset);
       sourceNode.onended = () => {
         remainingSources -= 1;
@@ -159,7 +172,8 @@ export class StemMixer {
         stem,
         source: sourceNode,
         gain,
-        filter,
+        toneFilter,
+        eqFilters,
         analyser,
         analyserData: new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>,
       };
@@ -168,7 +182,7 @@ export class StemMixer {
     this.startedAt = this.context.currentTime - offset;
     this.playing = true;
     this.state = "playing";
-    this.applyControls(controls, source);
+    this.applyControls(controls, source, mixProject);
     return true;
   }
 
@@ -192,7 +206,12 @@ export class StemMixer {
     }
   }
 
-  seek(position: number, controls: MasteringControls, source: PlaybackSource = this.playbackSource): void {
+  seek(
+    position: number,
+    controls: MasteringControls,
+    source: PlaybackSource = this.playbackSource,
+    mixProject?: MixProject,
+  ): void {
     const duration = this.getDuration(source);
     this.pausedAt = duration > 0 ? clamp(position, 0, duration) : 0;
     const wasPlaying = this.playing;
@@ -202,7 +221,7 @@ export class StemMixer {
       this.state = "ready";
     }
     if (wasPlaying) {
-      this.play(controls, source);
+      this.play(controls, source, mixProject);
     }
   }
 
@@ -219,7 +238,11 @@ export class StemMixer {
     this.state = "disposed";
   }
 
-  applyControls(controls: MasteringControls, source: PlaybackSource = this.playbackSource): void {
+  applyControls(
+    controls: MasteringControls,
+    source: PlaybackSource = this.playbackSource,
+    mixProject?: MixProject,
+  ): void {
     if (!this.context) {
       return;
     }
@@ -227,7 +250,8 @@ export class StemMixer {
     if (source === "original") {
       for (const chain of this.chains) {
         chain.gain.gain.setTargetAtTime(1, this.context.currentTime, 0.02);
-        chain.filter.gain.setTargetAtTime(0, this.context.currentTime, 0.02);
+        chain.toneFilter.gain.setTargetAtTime(0, this.context.currentTime, 0.02);
+        applyEqBands(chain.eqFilters, [], this.context.currentTime);
       }
       return;
     }
@@ -255,9 +279,20 @@ export class StemMixer {
       if (chain.stem === "original") {
         continue;
       }
+      const processing = mixProject?.stems[chain.stem];
       const value = values[chain.stem];
-      chain.gain.gain.setTargetAtTime(dbToGain(value.gainDb), this.context.currentTime, 0.02);
-      chain.filter.gain.setTargetAtTime(value.brightDb, this.context.currentTime, 0.02);
+      const gainDb = processing ? processing.gainDb : value.gainDb;
+      const muted = Boolean(processing?.muted);
+      const soloed = mixProject ? Object.values(mixProject.stems).some((stem) => stem.solo) : false;
+      const hiddenBySolo = soloed && !processing?.solo;
+
+      chain.gain.gain.setTargetAtTime(
+        dbToGain(muted || hiddenBySolo ? -60 : gainDb),
+        this.context.currentTime,
+        0.02,
+      );
+      chain.toneFilter.gain.setTargetAtTime(value.brightDb, this.context.currentTime, 0.02);
+      applyEqBands(chain.eqFilters, processing?.eqBands ?? [], this.context.currentTime);
     }
   }
 
@@ -390,4 +425,38 @@ function dbToGain(db: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function applyEqBands(filters: BiquadFilterNode[], bands: EqBand[], currentTime: number): void {
+  for (let index = 0; index < filters.length; index += 1) {
+    const filter = filters[index];
+    const band = bands[index];
+    if (!band || !band.enabled) {
+      resetEqFilter(filter);
+      continue;
+    }
+
+    filter.type = eqBandTypeToBiquad(band.type);
+    filter.frequency.setTargetAtTime(clamp(band.frequencyHz, 20, 20000), currentTime, 0.02);
+    filter.Q.setTargetAtTime(clamp(band.q, 0.1, 24), currentTime, 0.02);
+    filter.gain.setTargetAtTime(clamp(band.gainDb, -24, 24), currentTime, 0.02);
+  }
+}
+
+function resetEqFilter(filter: BiquadFilterNode): void {
+  filter.type = "allpass";
+  filter.frequency.value = 1000;
+  filter.Q.value = 1;
+  filter.gain.value = 0;
+}
+
+function eqBandTypeToBiquad(type: EqBand["type"]): BiquadFilterType {
+  const mapping: Record<EqBand["type"], BiquadFilterType> = {
+    bell: "peaking",
+    lowShelf: "lowshelf",
+    highShelf: "highshelf",
+    highPass: "highpass",
+    lowPass: "lowpass",
+  };
+  return mapping[type];
 }

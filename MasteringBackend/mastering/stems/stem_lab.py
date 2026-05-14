@@ -8,7 +8,7 @@ from typing import Mapping
 import numpy as np
 from pedalboard import Compressor, HighShelfFilter, Pedalboard
 import soundfile as sf
-from scipy.signal import butter, resample_poly, sosfiltfilt
+from scipy.signal import butter, lfilter, resample_poly, sosfiltfilt
 
 from mastering.contracts.decision import PresetName
 from mastering.orchestration.pipeline import run_mastering_pipeline
@@ -186,19 +186,25 @@ def _soft_saturate(audio: np.ndarray, amount: float) -> np.ndarray:
     return ((1.0 - mix) * audio + mix * wet).astype(np.float32, copy=False)
 
 
-def _process_stems(stems: Mapping[str, np.ndarray], sample_rate: int, args: argparse.Namespace) -> np.ndarray:
+def _process_stems(
+    stems: Mapping[str, np.ndarray],
+    sample_rate: int,
+    args: argparse.Namespace,
+    mix_project: Mapping[str, object] | None = None,
+) -> np.ndarray:
     processed = _match_lengths(stems)
+    effective_args = _args_with_mix_project(args, mix_project)
 
-    processed["vocals"] = apply_gain_linear(processed["vocals"], args.vocal_gain)
-    processed["vocals"] = _deharsh(processed["vocals"], sample_rate, args.vocal_deharsh)
-    processed["vocals"] = _apply_width(processed["vocals"], args.vocal_width)
+    processed["vocals"] = apply_gain_linear(processed["vocals"], effective_args.vocal_gain)
+    processed["vocals"] = _deharsh(processed["vocals"], sample_rate, effective_args.vocal_deharsh)
+    processed["vocals"] = _apply_width(processed["vocals"], effective_args.vocal_width)
 
-    processed["drums"] = apply_gain_linear(processed["drums"], args.drums_gain)
-    processed["bass"] = apply_gain_linear(processed["bass"], args.bass_gain)
-    processed["other"] = apply_gain_linear(processed["other"], args.other_gain)
+    processed["drums"] = apply_gain_linear(processed["drums"], effective_args.drums_gain)
+    processed["bass"] = apply_gain_linear(processed["bass"], effective_args.bass_gain)
+    processed["other"] = apply_gain_linear(processed["other"], effective_args.other_gain)
 
-    if args.drums_punch > 0.0:
-        amount = float(np.clip(args.drums_punch, 0.0, 100.0)) / 100.0
+    if effective_args.drums_punch > 0.0:
+        amount = float(np.clip(effective_args.drums_punch, 0.0, 100.0)) / 100.0
         board = Pedalboard(
             [
                 Compressor(
@@ -211,16 +217,23 @@ def _process_stems(stems: Mapping[str, np.ndarray], sample_rate: int, args: argp
         )
         processed["drums"] = board(processed["drums"], sample_rate)
 
-    if abs(args.other_bright) > 1e-6:
-        gain = float(np.clip(args.other_bright, -4.0, 4.0))
+    if abs(effective_args.other_bright) > 1e-6:
+        gain = float(np.clip(effective_args.other_bright, -4.0, 4.0))
         board = Pedalboard([HighShelfFilter(cutoff_frequency_hz=6500.0, gain_db=gain)])
         processed["other"] = board(processed["other"], sample_rate)
+
+    for stem_name in STEM_NAMES:
+        processed[stem_name] = _apply_eq_bands(
+            processed[stem_name],
+            sample_rate,
+            _eq_bands_for(mix_project, stem_name),
+        )
 
     remix = sum(processed[name] for name in STEM_NAMES)
     peak = float(np.max(np.abs(remix)))
     if peak > 0.98:
         remix = remix * (0.98 / peak)
-    return _soft_saturate(remix.astype(np.float32, copy=False), args.analog_color)
+    return _soft_saturate(remix.astype(np.float32, copy=False), effective_args.analog_color)
 
 
 def _raw_stem_remix(stems: Mapping[str, np.ndarray]) -> np.ndarray:
@@ -237,10 +250,11 @@ def _delta_rebalance_mix(
     stems: Mapping[str, np.ndarray],
     stem_sample_rate: int,
     args: argparse.Namespace,
+    mix_project: Mapping[str, object] | None = None,
 ) -> tuple[np.ndarray, int]:
     original, original_sample_rate = read_audio(str(input_path))
     raw_remix = _raw_stem_remix(stems)
-    processed_remix = _process_stems(stems, stem_sample_rate, args)
+    processed_remix = _process_stems(stems, stem_sample_rate, args, mix_project=mix_project)
     length = min(raw_remix.shape[0], processed_remix.shape[0])
     delta = processed_remix[:length] - raw_remix[:length]
     delta = _resample_audio(delta, stem_sample_rate, original_sample_rate)
@@ -251,6 +265,145 @@ def _delta_rebalance_mix(
     if peak > 0.98:
         output = output * (0.98 / peak)
     return output.astype(np.float32, copy=False), original_sample_rate
+
+
+def _args_with_mix_project(
+    args: argparse.Namespace,
+    mix_project: Mapping[str, object] | None,
+) -> argparse.Namespace:
+    values = vars(args).copy()
+    if not mix_project:
+        return argparse.Namespace(**values)
+
+    values["vocal_gain"] = _mix_project_gain(mix_project, "vocals", values["vocal_gain"])
+    values["drums_gain"] = _mix_project_gain(mix_project, "drums", values["drums_gain"])
+    values["bass_gain"] = _mix_project_gain(mix_project, "bass", values["bass_gain"])
+    values["other_gain"] = _mix_project_gain(mix_project, "other", values["other_gain"])
+    return argparse.Namespace(**values)
+
+
+def _mix_project_gain(
+    mix_project: Mapping[str, object],
+    stem_name: str,
+    fallback_gain_db: float,
+) -> float:
+    stems = mix_project.get("stems")
+    if not isinstance(stems, Mapping):
+        return fallback_gain_db
+
+    soloed = {
+        name
+        for name, processing in stems.items()
+        if isinstance(processing, Mapping) and bool(processing.get("solo"))
+    }
+    processing = stems.get(stem_name)
+    if not isinstance(processing, Mapping):
+        return fallback_gain_db
+
+    if soloed and stem_name not in soloed:
+        return -60.0
+    if bool(processing.get("muted")):
+        return -60.0
+    return float(processing.get("gain_db", fallback_gain_db))
+
+
+def _eq_bands_for(
+    mix_project: Mapping[str, object] | None,
+    stem_name: str,
+) -> list[Mapping[str, object]]:
+    if not mix_project:
+        return []
+    stems = mix_project.get("stems")
+    if not isinstance(stems, Mapping):
+        return []
+    processing = stems.get(stem_name)
+    if not isinstance(processing, Mapping):
+        return []
+    bands = processing.get("eq_bands")
+    if not isinstance(bands, list):
+        return []
+    return [band for band in bands if isinstance(band, Mapping)]
+
+
+def _apply_eq_bands(
+    audio: np.ndarray,
+    sample_rate: int,
+    bands: list[Mapping[str, object]],
+) -> np.ndarray:
+    output = audio
+    for band in bands:
+        if not bool(band.get("enabled", True)):
+            continue
+        coefficients = _eq_band_coefficients(band, sample_rate)
+        if coefficients is None:
+            continue
+        b, a = coefficients
+        output = lfilter(b, a, output, axis=0).astype(np.float32, copy=False)
+    return output
+
+
+def _eq_band_coefficients(
+    band: Mapping[str, object],
+    sample_rate: int,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    band_type = str(band.get("type", "bell"))
+    frequency_hz = float(band.get("frequency_hz", 1000.0))
+    gain_db = float(band.get("gain_db", 0.0))
+    q = float(band.get("q", 1.0))
+
+    frequency_hz = float(np.clip(frequency_hz, 20.0, sample_rate * 0.45))
+    q = float(np.clip(q, 0.1, 24.0))
+    omega = 2.0 * np.pi * frequency_hz / sample_rate
+    sin_omega = np.sin(omega)
+    cos_omega = np.cos(omega)
+    alpha = sin_omega / (2.0 * q)
+    amplitude = 10.0 ** (gain_db / 40.0)
+
+    if band_type == "bell":
+        b0 = 1.0 + alpha * amplitude
+        b1 = -2.0 * cos_omega
+        b2 = 1.0 - alpha * amplitude
+        a0 = 1.0 + alpha / amplitude
+        a1 = -2.0 * cos_omega
+        a2 = 1.0 - alpha / amplitude
+    elif band_type == "lowShelf":
+        sqrt_a = np.sqrt(amplitude)
+        two_sqrt_a_alpha = 2.0 * sqrt_a * alpha
+        b0 = amplitude * ((amplitude + 1.0) - (amplitude - 1.0) * cos_omega + two_sqrt_a_alpha)
+        b1 = 2.0 * amplitude * ((amplitude - 1.0) - (amplitude + 1.0) * cos_omega)
+        b2 = amplitude * ((amplitude + 1.0) - (amplitude - 1.0) * cos_omega - two_sqrt_a_alpha)
+        a0 = (amplitude + 1.0) + (amplitude - 1.0) * cos_omega + two_sqrt_a_alpha
+        a1 = -2.0 * ((amplitude - 1.0) + (amplitude + 1.0) * cos_omega)
+        a2 = (amplitude + 1.0) + (amplitude - 1.0) * cos_omega - two_sqrt_a_alpha
+    elif band_type == "highShelf":
+        sqrt_a = np.sqrt(amplitude)
+        two_sqrt_a_alpha = 2.0 * sqrt_a * alpha
+        b0 = amplitude * ((amplitude + 1.0) + (amplitude - 1.0) * cos_omega + two_sqrt_a_alpha)
+        b1 = -2.0 * amplitude * ((amplitude - 1.0) + (amplitude + 1.0) * cos_omega)
+        b2 = amplitude * ((amplitude + 1.0) + (amplitude - 1.0) * cos_omega - two_sqrt_a_alpha)
+        a0 = (amplitude + 1.0) - (amplitude - 1.0) * cos_omega + two_sqrt_a_alpha
+        a1 = 2.0 * ((amplitude - 1.0) - (amplitude + 1.0) * cos_omega)
+        a2 = (amplitude + 1.0) - (amplitude - 1.0) * cos_omega - two_sqrt_a_alpha
+    elif band_type == "highPass":
+        b0 = (1.0 + cos_omega) / 2.0
+        b1 = -(1.0 + cos_omega)
+        b2 = (1.0 + cos_omega) / 2.0
+        a0 = 1.0 + alpha
+        a1 = -2.0 * cos_omega
+        a2 = 1.0 - alpha
+    elif band_type == "lowPass":
+        b0 = (1.0 - cos_omega) / 2.0
+        b1 = 1.0 - cos_omega
+        b2 = (1.0 - cos_omega) / 2.0
+        a0 = 1.0 + alpha
+        a1 = -2.0 * cos_omega
+        a2 = 1.0 - alpha
+    else:
+        return None
+
+    b = np.array([b0 / a0, b1 / a0, b2 / a0], dtype=np.float64)
+    a = np.array([1.0, a1 / a0, a2 / a0], dtype=np.float64)
+    return b, a
 
 
 def main() -> int:

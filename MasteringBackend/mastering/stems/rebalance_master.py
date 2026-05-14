@@ -174,6 +174,7 @@ def _write_report(
     mastering_preset: str,
     skipped_final_master: bool,
     mix_mode: MixMode,
+    mix_project: Mapping[str, object] | None,
 ) -> None:
     payload = {
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -185,6 +186,7 @@ def _write_report(
         "profile": asdict(profile),
         "mastering_preset": mastering_preset,
         "skip_final_master": skipped_final_master,
+        "mix_project": mix_project,
         "before": _analysis_dict(input_path),
         "after": _analysis_dict(output_path),
     }
@@ -204,6 +206,7 @@ def process_rebalance_master(
     keep_stems: bool = False,
     skip_final_master: bool = False,
     control_overrides: Mapping[str, float] | None = None,
+    mix_project: Mapping[str, object] | None = None,
     mix_mode: MixMode = "delta",
 ) -> dict:
     input_path = Path(input_wav).resolve()
@@ -231,9 +234,15 @@ def process_rebalance_master(
             stems,
             stem_sample_rate,
             _preset_args(profile),
+            mix_project=mix_project,
         )
     else:
-        candidate = _process_stems(stems, stem_sample_rate, _preset_args(profile))
+        candidate = _process_stems(
+            stems,
+            stem_sample_rate,
+            _preset_args(profile),
+            mix_project=mix_project,
+        )
         candidate_sample_rate = stem_sample_rate
 
     if skip_final_master:
@@ -272,6 +281,7 @@ def process_rebalance_master(
         mastering_preset,
         skip_final_master,
         mix_mode,
+        mix_project,
     )
     return {
         "input": str(input_path),
@@ -282,6 +292,7 @@ def process_rebalance_master(
         "mix_mode": mix_mode,
         "profile": profile.name,
         "controls": asdict(profile),
+        "mix_project": mix_project,
         "mastering_preset": mastering_preset,
         "skip_final_master": skip_final_master,
     }

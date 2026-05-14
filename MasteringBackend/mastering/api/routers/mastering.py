@@ -9,7 +9,7 @@ except Exception:  # pragma: no cover
 if APIRouter is not None:
     from mastering.api.schemas.tracks import RenderRequest, StemRebalanceRequest
     from mastering.application.track_payloads import track_to_payload
-    from mastering.application.track_jobs import TrackJobService
+    from mastering.application.track_jobs import TrackJobService, TrackStateError
     from mastering.config import SETTINGS
     from mastering.jobs.models import RenderParams, STEM_NAMES
     from mastering.jobs.runner import JobQueueFullError
@@ -78,6 +78,7 @@ if APIRouter is not None:
                 skip_final_master=request.skip_final_master,
                 mix_mode=request.mix_mode,
                 control_overrides=request.controls.enabled() if request.controls else None,
+                mix_project=request.mix_project.dict() if request.mix_project else None,
             )
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -158,13 +159,14 @@ if APIRouter is not None:
             record = track_jobs.require_track(track_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Track not found") from exc
-        if record.status not in ("ready_to_mix", "done", "failed"):
+        if record.status not in ("ready_to_mix", "done"):
             raise HTTPException(status_code=409, detail=f"Track is {record.status}")
 
         params = RenderParams(
             profile=request.profile,
             mastering_preset=request.mastering_preset,
             controls=request.controls.enabled() if request.controls else {},
+            mix_project=request.mix_project.dict() if request.mix_project else None,
             mix_mode=request.mix_mode,
             skip_final_master=request.skip_final_master,
         )
@@ -172,6 +174,8 @@ if APIRouter is not None:
             return track_to_payload(track_jobs.render_track(track_id, params), track_jobs.storage)
         except JobQueueFullError as exc:
             raise HTTPException(status_code=429, detail=str(exc)) from exc
+        except TrackStateError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @router.get("/tracks/{track_id}/download")
     async def download_track(track_id: str) -> FileResponse:

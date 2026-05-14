@@ -1,10 +1,14 @@
 import type { CSSProperties } from "react";
+import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import {
   definitionForMode,
+  type EqBand,
+  type EqBandType,
   masteringControlDefinitions,
   type MasteringControls,
   type MixMode,
+  type StemEqBands,
   type StemControlState,
 } from "../../entities/mastering/model/controls";
 import { stemVisuals } from "../../entities/track/model/stems";
@@ -16,9 +20,11 @@ type Props = {
   canRender: boolean;
   controls: MasteringControls;
   downloadUrl: string | null;
+  eqBandsByStem: StemEqBands;
   mixMode: MixMode;
   stemState: StemControlState;
   onChange: (controls: MasteringControls) => void;
+  onEqBandsChange: (bands: StemEqBands) => void;
   onMixModeChange: (mode: MixMode) => void;
   onRender: () => void;
   onStemStateChange: (state: StemControlState) => void;
@@ -29,13 +35,18 @@ export function MixerPanel({
   canRender,
   controls,
   downloadUrl,
+  eqBandsByStem,
   mixMode,
   stemState,
   onChange,
+  onEqBandsChange,
   onMixModeChange,
   onRender,
   onStemStateChange,
 }: Props) {
+  const [selectedStem, setSelectedStem] = useState<StemName>("other");
+  const selectedBands = eqBandsByStem[selectedStem];
+
   function toggleStem(stem: StemName, key: "muted" | "solo") {
     onStemStateChange({
       ...stemState,
@@ -44,6 +55,42 @@ export function MixerPanel({
         [key]: !stemState[stem][key],
       },
     });
+  }
+
+  function updateBands(stem: StemName, bands: EqBand[]) {
+    onEqBandsChange({
+      ...eqBandsByStem,
+      [stem]: bands,
+    });
+  }
+
+  function addBand(type: EqBandType) {
+    if (selectedBands.length >= 8) return;
+    const band: EqBand = {
+      id: `${selectedStem}-${Date.now()}-${selectedBands.length}`,
+      type,
+      frequencyHz: defaultFrequency(type),
+      gainDb: type === "highPass" || type === "lowPass" ? 0 : 1.5,
+      q: type === "bell" ? 1.2 : 0.7,
+      enabled: true,
+    };
+    updateBands(selectedStem, [...selectedBands, band]);
+  }
+
+  function updateBand(index: number, patch: Partial<EqBand>) {
+    updateBands(
+      selectedStem,
+      selectedBands.map((band, bandIndex) =>
+        bandIndex === index ? {...band, ...patch} : band,
+      ),
+    );
+  }
+
+  function removeBand(index: number) {
+    updateBands(
+      selectedStem,
+      selectedBands.filter((_, bandIndex) => bandIndex !== index),
+    );
   }
 
   return (
@@ -136,6 +183,127 @@ export function MixerPanel({
           );
         })}
       </div>
+
+      <div className="stem-eq">
+        <div className="stem-eq__head">
+          <div>
+            <p className="eyebrow">Stem EQ</p>
+            <h3>Эквалайзер стема</h3>
+          </div>
+          <span>{selectedBands.length}/8 bands</span>
+        </div>
+
+        <div className="stem-eq__tabs" aria-label="Выбор стема для EQ">
+          {stemNames.map((stem) => (
+            <button
+              className={selectedStem === stem ? "active" : ""}
+              key={stem}
+              onClick={() => setSelectedStem(stem)}
+            >
+              {stemVisuals[stem].label}
+            </button>
+          ))}
+        </div>
+
+        <div className="stem-eq__actions">
+          <button onClick={() => addBand("bell")} disabled={selectedBands.length >= 8}>
+            Bell
+          </button>
+          <button onClick={() => addBand("lowShelf")} disabled={selectedBands.length >= 8}>
+            Low shelf
+          </button>
+          <button onClick={() => addBand("highShelf")} disabled={selectedBands.length >= 8}>
+            High shelf
+          </button>
+        </div>
+
+        <div className="stem-eq__bands">
+          {selectedBands.length === 0 ? (
+            <p className="stem-eq__empty">
+              Добавьте точку EQ, чтобы менять только выбранную часть трека.
+            </p>
+          ) : (
+            selectedBands.map((band, index) => (
+              <div className="eq-band" key={band.id}>
+                <div className="eq-band__top">
+                  <label>
+                    <input
+                      checked={band.enabled}
+                      type="checkbox"
+                      onChange={(event) => updateBand(index, {enabled: event.target.checked})}
+                    />
+                    Band {index + 1}
+                  </label>
+                  <select
+                    value={band.type}
+                    onChange={(event) => updateBand(index, {type: event.target.value as EqBandType})}
+                  >
+                    <option value="bell">Bell</option>
+                    <option value="lowShelf">Low shelf</option>
+                    <option value="highShelf">High shelf</option>
+                    <option value="highPass">High pass</option>
+                    <option value="lowPass">Low pass</option>
+                  </select>
+                  <button className="eq-band__remove" onClick={() => removeBand(index)}>
+                    Удалить
+                  </button>
+                </div>
+
+                <label className="eq-control">
+                  <span>Частота</span>
+                  <input
+                    max={20000}
+                    min={20}
+                    step={10}
+                    type="range"
+                    value={band.frequencyHz}
+                    onChange={(event) => updateBand(index, {frequencyHz: Number(event.target.value)})}
+                  />
+                  <output>{Math.round(band.frequencyHz)} Hz</output>
+                </label>
+
+                <label className="eq-control">
+                  <span>Gain</span>
+                  <input
+                    disabled={band.type === "highPass" || band.type === "lowPass"}
+                    max={12}
+                    min={-12}
+                    step={0.1}
+                    type="range"
+                    value={band.gainDb}
+                    onChange={(event) => updateBand(index, {gainDb: Number(event.target.value)})}
+                  />
+                  <output>{band.gainDb.toFixed(1)} dB</output>
+                </label>
+
+                <label className="eq-control">
+                  <span>Q</span>
+                  <input
+                    max={12}
+                    min={0.1}
+                    step={0.1}
+                    type="range"
+                    value={band.q}
+                    onChange={(event) => updateBand(index, {q: Number(event.target.value)})}
+                  />
+                  <output>{band.q.toFixed(1)}</output>
+                </label>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
+}
+
+function defaultFrequency(type: EqBandType): number {
+  const frequencies: Record<EqBandType, number> = {
+    bell: 3000,
+    lowShelf: 160,
+    highShelf: 6500,
+    highPass: 80,
+    lowPass: 14000,
+  };
+  return frequencies[type];
 }

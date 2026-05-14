@@ -1,6 +1,28 @@
 import type { StemName } from "../../track/model/types";
 
 export type MixMode = "delta" | "full";
+export type EqBandType = "bell" | "lowShelf" | "highShelf" | "highPass" | "lowPass";
+
+export type EqBand = {
+  id: string;
+  type: EqBandType;
+  frequencyHz: number;
+  gainDb: number;
+  q: number;
+  enabled: boolean;
+};
+
+export type StemProcessing = {
+  gainDb: number;
+  muted: boolean;
+  solo: boolean;
+  eqBands: EqBand[];
+};
+
+export type MixProject = {
+  mode: MixMode;
+  stems: Record<StemName, StemProcessing>;
+};
 
 export type MasteringControls = {
   vocal_gain: number;
@@ -25,6 +47,7 @@ export type ControlDefinition = {
 };
 
 export type StemControlState = Record<StemName, {muted: boolean; solo: boolean}>;
+export type StemEqBands = Record<StemName, EqBand[]>;
 
 export const defaultControls: MasteringControls = {
   vocal_gain: 0.9,
@@ -42,6 +65,23 @@ export const defaultStemControlState: StemControlState = {
   drums: {muted: false, solo: false},
   bass: {muted: false, solo: false},
   other: {muted: false, solo: false},
+};
+
+export const defaultStemEqBands: StemEqBands = {
+  vocals: [],
+  drums: [],
+  bass: [],
+  other: [],
+};
+
+export const defaultMixProject: MixProject = {
+  mode: "delta",
+  stems: {
+    vocals: {gainDb: defaultControls.vocal_gain, muted: false, solo: false, eqBands: []},
+    drums: {gainDb: defaultControls.drums_gain, muted: false, solo: false, eqBands: []},
+    bass: {gainDb: defaultControls.bass_gain, muted: false, solo: false, eqBands: []},
+    other: {gainDb: defaultControls.music_gain, muted: false, solo: false, eqBands: []},
+  },
 };
 
 export const masteringControlDefinitions: ControlDefinition[] = [
@@ -98,4 +138,35 @@ export function definitionForMode(
     return {...definition, min: -60, max: 12};
   }
   return definition;
+}
+
+export function buildMixProjectFromControls(
+  controls: MasteringControls,
+  stemState: StemControlState,
+  mode: MixMode,
+  eqBandsByStem: StemEqBands = defaultStemEqBands,
+): MixProject {
+  return {
+    mode,
+    stems: {
+      vocals: stemProcessing("vocals", controls.vocal_gain, stemState, eqBandsByStem),
+      drums: stemProcessing("drums", controls.drums_gain, stemState, eqBandsByStem),
+      bass: stemProcessing("bass", controls.bass_gain, stemState, eqBandsByStem),
+      other: stemProcessing("other", controls.music_gain, stemState, eqBandsByStem),
+    },
+  };
+}
+
+function stemProcessing(
+  stem: StemName,
+  gainDb: number,
+  stemState: StemControlState,
+  eqBandsByStem: StemEqBands,
+): StemProcessing {
+  return {
+    gainDb,
+    muted: stemState[stem].muted,
+    solo: stemState[stem].solo,
+    eqBands: eqBandsByStem[stem],
+  };
 }
